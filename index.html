@@ -810,6 +810,20 @@ button{font:inherit;color:inherit;cursor:pointer}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px #0006}
 .sw.on{background:#2f8be6}.sw.on::after{left:25px}
 input[type=range]{width:100%;direction:ltr}
+#dp{direction:ltr;display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.dp-lbl{font-size:12px;font-weight:700;color:#40566b;margin-top:6px;direction:rtl;text-align:right}
+.dp-row{display:flex;align-items:center;gap:2px;justify-content:center;width:100%}
+.dp-col{display:flex;flex-direction:column;flex:1 1 0;max-width:42px;min-width:0;-webkit-touch-callout:none;touch-action:none}
+.dp-col button{height:34px;border:1px solid #7f93a6;background:linear-gradient(#fdfefe,#d3dee8);font-size:13px;padding:0;color:#1b2a38;touch-action:none}
+.dp-col button:first-child{border-radius:9px 9px 0 0;border-bottom:0}
+.dp-col button:last-child{border-radius:0 0 9px 9px;border-top:0}
+.dp-col button:active{background:#b7d0ea}
+.dp-box{height:46px;display:flex;align-items:center;justify-content:center;font:800 24px/1 system-ui,-apple-system,sans-serif;background:#fff;border:1px solid #7f93a6;font-variant-numeric:tabular-nums;color:#111}
+.dp-col.hem .dp-box{color:#1662b8}
+.dp-col.flash .dp-box{background:#e3f0ff}
+.dp-lit{font:800 22px system-ui,sans-serif;color:#33475a;flex:none;padding:0 1px}
+.dp-gap{flex:none;width:10px}
+#dp.bad .dp-box{border-color:#d33;background:#fff4f4}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -885,10 +899,17 @@ input[type=range]{width:100%;direction:ltr}
    <!-- COORDINATES -->
    <section class="view" id="v-coord">
     <div class="panel">
-     <h4>أدخل الإحداثيات بأي صيغة</h4>
-     <input class="inp ltr" id="co-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="N25°12.289' E055°16.247'">
-     <div class="note" style="margin-top:6px;direction:ltr;text-align:left">
-      N25°12.289' E055°16.247'<br>N25 12 17.3 E55 16 14.8<br>25.20481, 55.27078<br>40R 330123 2788123<br>40R CN 30123 88123
+     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h4 style="margin:0">أدخل الإحداثيات</h4><button class="chip" id="co-mode"></button></div>
+     <div id="dp-wrap">
+      <div class="chips" id="dp-fmts" style="margin:10px 0 2px;direction:ltr"></div>
+      <div id="dp"></div>
+      <div class="note" style="margin-top:8px;text-align:center">اضغط ▲ ▼ أو اسحب الرقم للأعلى/للأسفل • اضغط مطوّلاً للتسريع</div>
+     </div>
+     <div id="co-typed" style="display:none;margin-top:10px">
+      <input class="inp ltr" id="co-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="N25°12.289' E055°16.247'">
+      <div class="note" style="margin-top:6px;direction:ltr;text-align:left">
+       N25°12.289' E055°16.247'<br>N25 12 17.3 E55 16 14.8<br>25.20481, 55.27078<br>40R 330123 2788123<br>40R CN 30123 88123
+      </div>
      </div>
     </div>
     <div class="panel" id="co-out" style="margin-top:0"></div>
@@ -1076,31 +1097,43 @@ const LAYERS={
  osm:{name:'شوارع — OpenStreetMap',url:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',max:19,kb:14,attr:'© OpenStreetMap contributors',noBulk:true},
  sat:{name:'قمر صناعي — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',max:19,kb:28,attr:'Imagery © Esri, Maxar, Earthstar Geographics'},
  etopo:{name:'طبوغرافية — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',max:19,kb:20,attr:'Tiles © Esri'},
- custom:{name:'مصدر مخصص (رابطك)',url:'',max:19,kb:20,attr:'Custom tiles'}
+ hybrid:{name:'قمر صناعي + أسماء — Esri',parts:['sat','lbl'],max:19,kb:34,attr:'Imagery © Esri, Maxar, Earthstar Geographics | Labels © Esri'},
+ estreet:{name:'شوارع تفصيلية — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',max:19,kb:16,attr:'Tiles © Esri'},
+ custom:{name:'مصدر مخصص (رابطك)',url:'',max:19,kb:20,attr:'Custom tiles'},
+ lbl:{hidden:1,name:'labels',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',max:19,kb:6,attr:''}
 };
 function layerDef(id){const L=Object.assign({},LAYERS[id]||LAYERS.topo);if(id==='custom')L.url=S.custom;return L}
 function tileURL(id,z,x,y){const L=layerDef(id);const sub=L.sub?L.sub[Math.abs(x+y)%L.sub.length]:'a';
  return L.url.replace('{s}',sub).replace('{z}',z).replace('{x}',x).replace('{y}',y).replace('{-y}',(1<<z)-1-y)}
 
 let map,baseLayer,posMarker,accCircle,curLine,destLine,destMarker,wptLayer,trkLayer,areaLayer,follow=true;
+// When a tile is missing offline, enlarge the matching part of a saved lower-zoom tile.
+async function parentTile(id,c){for(let d=1;d<=6&&c.z-d>=0;d++){const b=await tileGet(id+'/'+(c.z-d)+'/'+(c.x>>d)+'/'+(c.y>>d));
+ if(b){const bm=await createImageBitmap(b),n=1<<d,w=bm.width/n,h=bm.height/n,cv=document.createElement('canvas');cv.width=cv.height=256;
+  const g=cv.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(bm,(c.x&(n-1))*w,(c.y&(n-1))*h,w,h,0,0,256,256);
+  return await new Promise(r=>cv.toBlob(r,'image/jpeg',.9))}}return null}
 const OfflineLayer=L.GridLayer.extend({
  createTile(c,done){
   const img=document.createElement('img');img.alt='';img.setAttribute('role','presentation');
   const id=this.options.lid,k=id+'/'+c.z+'/'+c.x+'/'+c.y,url=tileURL(id,c.z,c.x,c.y);
   const direct=()=>{img.onload=()=>done(null,img);img.onerror=()=>done(new Error('tile'),img);img.src=url};
   const fromBlob=b=>{const u=URL.createObjectURL(b);img.onload=()=>{URL.revokeObjectURL(u);done(null,img)};img.onerror=()=>{URL.revokeObjectURL(u);done(new Error('tile'),img)};img.src=u};
+  const fallback=()=>parentTile(id,c).then(b=>b?fromBlob(b):done(new Error('tile'),img)).catch(()=>done(new Error('tile'),img));
+  const direct2=()=>{img.onload=()=>done(null,img);img.onerror=fallback;img.src=url};
   tileGet(k).then(b=>{
    if(b)return fromBlob(b);
-   if(!navigator.onLine||!url)return done(new Error('offline'),img);
-   if(!S.autoCache)return direct();
-   fetch(url,{mode:'cors'}).then(r=>{if(!r.ok)throw 0;return r.blob()}).then(b=>{tilePut(k,b);fromBlob(b)}).catch(direct);
-  }).catch(direct);
+   if(!navigator.onLine||!url)return fallback();
+   if(!S.autoCache)return direct2();
+   fetch(url,{mode:'cors'}).then(r=>{if(!r.ok)throw 0;return r.blob()}).then(b=>{tilePut(k,b);fromBlob(b)}).catch(direct2);
+  }).catch(direct2);
   return img}
 });
-function setBase(id){S.layer=id;saveS();const L=layerDef(id);
+let baseLayers=[];
+const visLayers=()=>Object.keys(LAYERS).filter(k=>!LAYERS[k].hidden&&(k!=='custom'||S.custom));
+function setBase(id){if(!LAYERS[id]||LAYERS[id].hidden)id='topo';S.layer=id;saveS();const L=layerDef(id);
  if(id==='custom'&&!L.url){toast('أدخل رابط المصدر المخصص من الإعدادات');}
- if(baseLayer)map.removeLayer(baseLayer);
- baseLayer=new OfflineLayer({lid:id,maxNativeZoom:L.max,maxZoom:20,attribution:L.attr,keepBuffer:3});baseLayer.addTo(map);baseLayer.bringToBack()}
+ baseLayers.forEach(l=>map.removeLayer(l));
+ baseLayers=(L.parts||[id]).map((p,i)=>{const P=layerDef(p);return new OfflineLayer({lid:p,maxNativeZoom:P.max,maxZoom:20,attribution:i?'':L.attr,keepBuffer:3,zIndex:1+i}).addTo(map)})}
 
 const ARROW='<svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 2L31 32 18 25 5 32z" fill="#1565d8" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>';
 const DOT='<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="9" fill="#1565d8" stroke="#fff" stroke-width="3"/></svg>';
@@ -1368,7 +1401,7 @@ function pointMenu(lat,lon){sheet(fmtLL(lat,lon),[
  {t:'حفظ كنقطة طريق',fn:()=>{const w=addWpt(lat,lon);toast('تم حفظ '+w.name)}},
  {t:'انطلق إلى هنا',fn:()=>setDest(lat,lon,'نقطة على الخريطة')},
  {t:'عرض الإحداثيات بكل الصيغ',fn:()=>{COEDIT=null;$('#co-in').value=fmtLL(lat,lon,'DEC');go('coord')}},
- {t:'تنزيل الخريطة حول هذه النقطة',fn:()=>{const b=map.getBounds();DLB=boundsObj();go('dl')}}])}
+ {t:'تنزيل الخريطة حول هذه النقطة',fn:()=>{DLMODE='area';DLB=boundsObj();go('dl')}}])}
 
 /* ============ where to ============ */
 function renderWhere(){const l=$('#where-list');l.innerHTML='';
@@ -1388,7 +1421,49 @@ function renderWhere(){const l=$('#where-list');l.innerHTML='';
 
 /* ============ coordinates view ============ */
 let COEDIT=null;
-function renderCoord(){const inp=$('#co-in');if(!inp.value&&POS)inp.value=fmtLL(POS.lat,POS.lon);coPreview();
+/* --- digit-box coordinate entry (Garmin style) --- */
+const DPT={DDM:{rows:["H##°##.###'","W###°##.###'"],lab:['خط العرض','خط الطول']},
+ DD:{rows:['H##.#####°','W###.#####°'],lab:['خط العرض','خط الطول']},
+ DMS:{rows:['H##°##\'##.#"','W###°##\'##.#"'],lab:['خط العرض','خط الطول']},
+ UTM:{rows:['##B','#######','#######'],lab:['المنطقة والحزام (Zone)','الشرقي (Easting)','الشمالي (Northing)']},
+ MGRS:{rows:['##B CC','#####','#####'],lab:['المنطقة ومربع 100 كم','الشرقي (Easting)','الشمالي (Northing)']}};
+const DPSET={'#':'0123456789',H:'NS',W:'EW',B:'CDEFGHJKLMNPQRSTUVWX',C:'ABCDEFGHJKLMNPQRSTUVWXYZ'};
+let DPF=null,DPR=[];
+function dpFromLL(f,lat,lon){
+ if(f==='DDM')return [fDDM(lat,1),fDDM(lon,0)];if(f==='DD')return [fDD(lat,1),fDD(lon,0)];if(f==='DMS')return [fDMS(lat,1),fDMS(lon,0)];
+ const u=ll2utm(lat,lon);if(!u)return null;
+ if(f==='UTM')return [pad(u.zone,2)+u.band,pad(Math.floor(u.e),7),pad(Math.floor(u.n),7)];
+ const m=toMGRS(lat,lon).split(' ');return [pad(u.zone,2)+u.band+' '+m[1],m[2],m[3]]}
+const dpText=()=>DPR.join(' ');
+function dpLoad(f){f=DPT[f]?f:'DDM';const p=parseCoord($('#co-in').value)||(POS?{lat:POS.lat,lon:POS.lon}:null)||(map?{lat:map.getCenter().lat,lon:map.getCenter().lng}:{lat:25,lon:55});
+ let r=dpFromLL(f,p.lat,p.lon);if(!r){f='DDM';r=dpFromLL(f,p.lat,p.lon)}DPF=f;DPR=r;
+ $('#dp-fmts').innerHTML='';['DDM','DD','DMS','UTM','MGRS'].forEach(k=>{const c=document.createElement('button');c.className='chip'+(k===f?' on':'');
+  c.textContent={DDM:"hddd°mm.mmm'",DD:'hddd.ddddd°',DMS:'hddd°mm\'ss"',UTM:'UTM',MGRS:'MGRS'}[k];c.onclick=()=>{dpSync();dpLoad(k)};$('#dp-fmts').appendChild(c)});
+ dpRender()}
+function dpHold(btn,fn){let t1,t2;const stop=()=>{clearTimeout(t1);clearInterval(t2)};
+ btn.addEventListener('pointerdown',e=>{e.preventDefault();stop();fn();t1=setTimeout(()=>{t2=setInterval(fn,80)},420)});
+ ['pointerup','pointerleave','pointercancel'].forEach(ev=>btn.addEventListener(ev,stop));btn.addEventListener('contextmenu',e=>e.preventDefault())}
+function dpRender(){const el=$('#dp'),T=DPT[DPF];el.innerHTML='';
+ T.rows.forEach((tpl,ri)=>{const lb=document.createElement('div');lb.className='dp-lbl';lb.textContent=T.lab[ri];el.appendChild(lb);
+  const row=document.createElement('div');row.className='dp-row';
+  [...tpl].forEach((ch,ci)=>{
+   if(DPSET[ch]){const col=document.createElement('div');col.className='dp-col'+(ch==='H'||ch==='W'?' hem':'');
+    col.innerHTML='<button type="button" aria-label="زيادة">▲</button><div class="dp-box"></div><button type="button" aria-label="نقص">▼</button>';
+    const box=col.children[1];box.textContent=DPR[ri][ci];
+    const step=d=>{const set=DPSET[ch];let i=set.indexOf(DPR[ri][ci]);if(i<0)i=0;i=(i+d+set.length)%set.length;
+     DPR[ri]=DPR[ri].slice(0,ci)+set[i]+DPR[ri].slice(ci+1);box.textContent=set[i];col.classList.add('flash');clearTimeout(col._f);col._f=setTimeout(()=>col.classList.remove('flash'),250);dpSync()};
+    dpHold(col.children[0],()=>step(1));dpHold(col.children[2],()=>step(-1));
+    let sy=null;box.addEventListener('pointerdown',e=>{sy=e.clientY;try{box.setPointerCapture(e.pointerId)}catch(_){}});
+    box.addEventListener('pointermove',e=>{if(sy==null)return;const dy=e.clientY-sy;if(Math.abs(dy)>=20){step(dy<0?1:-1);sy=e.clientY}});
+    ['pointerup','pointercancel'].forEach(ev=>box.addEventListener(ev,()=>sy=null));
+    row.appendChild(col)}
+   else if(ch===' '){const g=document.createElement('span');g.className='dp-gap';row.appendChild(g)}
+   else{const s=document.createElement('span');s.className='dp-lit';s.textContent=ch;row.appendChild(s)}});
+  el.appendChild(row)});dpSync()}
+function dpSync(){if(!DPR.length)return;const t=dpText();$('#dp').classList.toggle('bad',!parseCoord(t));$('#co-in').value=t;coPreview()}
+function coModeUI(){const dp=S.coMode!=='kb';$('#dp-wrap').style.display=dp?'':'none';$('#co-typed').style.display=dp?'none':'';$('#co-mode').textContent=dp?'⌨ كتابة':'▦ أرقام';}
+$('#co-mode').onclick=()=>{S.coMode=S.coMode==='kb'?'dp':'kb';saveS();coModeUI();if(S.coMode!=='kb')dpLoad(DPF||(S.fmt==='DEC'?'DD':S.fmt));else $('#co-in').focus()};
+function renderCoord(){const inp=$('#co-in');if(!inp.value&&POS)inp.value=fmtLL(POS.lat,POS.lon);coModeUI();if(S.coMode!=='kb')dpLoad(DPF||(S.fmt==='DEC'?'DD':S.fmt));coPreview();
  const bb=$('#co-btns');bb.innerHTML=COEDIT?'<button class="btn pri full" id="co-apply">تطبيق على النقطة</button>':
   '<button class="btn pri" id="co-save">حفظ كنقطة</button><button class="btn" id="co-go">انطلق</button>';
  bb.innerHTML+='<button class="btn" id="co-map">عرض على الخريطة</button><button class="btn" id="co-me">موقعي الحالي</button>';
@@ -1399,7 +1474,7 @@ function renderCoord(){const inp=$('#co-in');if(!inp.value&&POS)inp.value=fmtLL(
  $('#co-map').onclick=()=>{const p=get();if(!p)return;follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>{map.setView([p.lat,p.lon],16);$('#cross').classList.add('on');updMapInfo()},60)};
  $('#co-me').onclick=()=>{if(!POS)return toast('بانتظار إشارة GPS');inp.value=fmtLL(POS.lat,POS.lon);coPreview()}}
 function coPreview(){const p=parseCoord($('#co-in').value),o=$('#co-out');
- if(!p){o.innerHTML='<div class="note">اكتب الإحداثيات بالأعلى لعرض التحويل إلى جميع صيغ جارمن.</div>';return}
+ if(!p){o.innerHTML=$('#co-in').value.trim()?'<div class="note" style="color:#b22">⚠️ إحداثيات غير صحيحة (تحقق من الدقائق والثواني أقل من 60، وخط العرض حتى 90).</div>':'<div class="note">أدخل الإحداثيات بالأعلى لعرض التحويل إلى جميع صيغ جارمن.</div>';return}
  o.innerHTML='<h4>التحويل (WGS 84)</h4>'+['DDM','DD','DMS','UTM','MGRS','DEC'].map(f=>`<div class="kv"><span dir="ltr">${esc(FMTS[f])}</span><b>${esc(fmtLL(p.lat,p.lon,f))}</b></div>`).join('')+
   (POS?`<div class="kv"><span>المسافة / الاتجاه</span><b>${fmtDist(hav(POS,p))} • ${Math.round(bearing(POS,p))}°</b></div>`:'')}
 $('#co-in').oninput=coPreview;
@@ -1470,6 +1545,7 @@ function renderTracks(){const b=$('#trk-body');const len=polyLen(CUR.pts);
    {t:'الملف الشخصي للارتفاع',fn:()=>elevProfile(t)},
    {t:'إعادة التسمية',fn:()=>setTimeout(()=>ask('اسم المسار',t.name,v=>{t.name=v.trim()||t.name;saveT();renderTracks()}),30)},
    {t:'تغيير اللون',fn:()=>setTimeout(()=>sheet('اللون',TCOL.map(c=>({t:'■ '+c,sel:t.color===c,fn:()=>{t.color=c;saveT();drawTracks();renderTracks()}}))),30)},
+   {t:'تنزيل خرائط تفصيلية على طول المسار',fn:()=>{DLMODE='trk';DLTRK=t.id;go('dl')}},
    {t:'تصدير GPX',fn:()=>exportGPX([],[t],t.name)},
    {t:'حذف',fn:()=>setTimeout(()=>confirmIt('حذف المسار «'+t.name+'»؟',()=>{TRACKS=TRACKS.filter(x=>x!==t);saveT();drawTracks();renderTracks()},'حذف'),30)}]);
   l.appendChild(r)})}
@@ -1526,85 +1602,124 @@ $('#file-in').onchange=e=>{if(e.target.files.length)importFiles(e.target.files);
 const pickFile=()=>$('#file-in').click();
 
 /* ============ map download ============ */
-let DLB=null,DLSEL=false,DLJOB=null;
+let DLB=null,DLSEL=false,DLJOB=null,DLMODE='area',DLTRK=null,DLW=500;
 const lon2x=(lon,z)=>Math.max(0,Math.min((1<<z)-1,Math.floor((lon+180)/360*(1<<z))));
 const lat2y=(lat,z)=>{lat=Math.max(-85.0511,Math.min(85.0511,lat));const r=lat*D2R;return Math.max(0,Math.min((1<<z)-1,Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*(1<<z))))};
 function tileRange(b,z){return {z,x1:lon2x(b.w,z),x2:lon2x(b.e,z),y1:lat2y(b.n,z),y2:lat2y(b.s,z)}}
 function countTiles(b,z1,z2){let n=0;for(let z=z1;z<=z2;z++){const r=tileRange(b,z);n+=(r.x2-r.x1+1)*(r.y2-r.y1+1)}return n}
-function* tileKeys(b,z1,z2,lid){for(let z=z1;z<=z2;z++){const r=tileRange(b,z);for(let x=r.x1;x<=r.x2;x++)for(let y=r.y1;y<=r.y2;y++)yield [lid,z,x,y]}}
-const MAXTILES=30000;
+const partsOf=lid=>layerDef(lid).parts||[lid];
+function bboxOf(pts){let n=-90,s=90,e=-180,w=180;pts.forEach(p=>{n=Math.max(n,p[0]);s=Math.min(s,p[0]);e=Math.max(e,p[1]);w=Math.min(w,p[1])});return {n,s,e,w}}
+function densify(pts,step){const out=[[pts[0][0],pts[0][1]]];let last=out[0];
+ for(let i=1;i<pts.length;i++){const a=pts[i],d=hav({lat:last[0],lon:last[1]},{lat:a[0],lon:a[1]});if(d<step&&i<pts.length-1)continue;
+  const n=Math.max(1,Math.ceil(d/step));for(let k=1;k<=n;k++)out.push([last[0]+(a[0]-last[0])*k/n,last[1]+(a[1]-last[1])*k/n]);last=[a[0],a[1]]}
+ return out}
+function areaRects(a,z){if(!a.corr)return [tileRange(a.b,z)];const dLat=a.corr.w/111320;
+ return a.corr.pts.map(p=>{const dLon=a.corr.w/(111320*Math.max(.01,Math.cos(p[0]*D2R)));return tileRange({n:p[0]+dLat,s:p[0]-dLat,e:p[1]+dLon,w:p[1]-dLon},z)})}
+function areaKeys(a){const out=new Set(),lids=partsOf(a.lid);
+ for(let z=a.z1;z<=a.z2;z++)for(const r of areaRects(a,z))for(let x=r.x1;x<=r.x2;x++)for(let y=r.y1;y<=r.y2;y++)for(const l of lids)out.add(l+'/'+z+'/'+x+'/'+y);
+ return [...out]}
+function areaCount(a){if(!a.corr)return countTiles(a.b,a.z1,a.z2)*partsOf(a.lid).length;return areaKeys(a).length}
+const MAXTILES=150000;
+const ZL=z=>z+' '+(z<=8?'(دولة)':z<=11?'(منطقة)':z<=13?'(مدينة)':z<=15?'(طرق وأحياء)':z<=17?'(تفصيلي)':'(أقصى تفصيل)');
+function dlTracks(){return [{id:'cur',name:'المسار الحالي',pts:CUR.pts},...TRACKS].filter(t=>t.pts&&t.pts.length>1)}
 function renderDL(){const b=$('#dl-body');
  if(DLJOB){b.innerHTML=`<div class="panel"><h4>جارٍ التنزيل: ${esc(DLJOB.name)}</h4><div class="prog"><i id="dl-bar"></i></div>
    <div class="kv"><span>التقدم</span><b id="dl-cnt"></b></div><div class="kv"><span>الحجم</span><b id="dl-sz"></b></div><div class="kv"><span>أخطاء</span><b id="dl-err"></b></div>
-   <div class="note">أبقِ التطبيق مفتوحًا والشاشة تعمل حتى ينتهي التنزيل.</div></div>
+   <div class="note">أبقِ التطبيق مفتوحًا والشاشة تعمل حتى ينتهي التنزيل. يمكنك الإيقاف ثم «إكمال التنزيل» لاحقًا.</div></div>
    <div class="btnbar"><button class="btn red full" id="dl-stop">إيقاف التنزيل</button></div>`;
   $('#dl-stop').onclick=()=>{DLJOB.abort=true};dlProgress();return}
  if(!DLB&&map)DLB=boundsObj();
- const L0=layerDef(S.layer),lid=S.layer;
- const z1=Math.max(2,Math.min(DLB.z,L0.max)-2);let z2=Math.min(L0.max,Math.max(z1,DLB.z+3));
- const st=LS.get('dlz',null);let zmin=st?Math.min(st[0],L0.max):z1,zmax=st?Math.min(st[1],L0.max):z2;
- b.innerHTML=`<div class="panel"><h4>المنطقة</h4>
+ if(!DLB||DLB.n-DLB.s<1e-5||DLB.e-DLB.w<1e-5){const c=POS?{lat:POS.lat,lng:POS.lon}:map.getCenter(),d=0.03;DLB={n:c.lat+d,s:c.lat-d,e:c.lng+d/Math.cos(c.lat*D2R),w:c.lng-d/Math.cos(c.lat*D2R),z:14}}
+ const lid=S.layer,L0=layerDef(lid);
+ const st=LS.get('dlz',null);
+ let zmin=st?Math.min(st[0],L0.max):Math.max(2,Math.min(DLB.z,L0.max)-2),zmax=st?Math.min(st[1],L0.max):Math.min(L0.max,DLB.z+3);
+ const trks=dlTracks();if(!trks.find(t=>String(t.id)===String(DLTRK)))DLTRK=trks.length?trks[trks.length-1].id:null;
+ const T=trks.find(t=>String(t.id)===String(DLTRK));
+ b.innerHTML=`<div class="btnbar" style="padding-bottom:0"><button class="btn ${DLMODE==='area'?'pri':''}" id="dm-a">▭ منطقة</button><button class="btn ${DLMODE==='trk'?'pri':''}" id="dm-t">〰 على طول مسار</button></div>`+
+ (DLMODE==='area'?`<div class="panel"><h4>المنطقة</h4>
    <div class="kv"><span>الشمال الغربي</span><b>${esc(fmtLL(DLB.n,DLB.w))}</b></div>
    <div class="kv"><span>الجنوب الشرقي</span><b>${esc(fmtLL(DLB.s,DLB.e))}</b></div>
    <div class="kv"><span>الأبعاد</span><b>${fmtDist(hav({lat:DLB.n,lon:DLB.w},{lat:DLB.n,lon:DLB.e}))} × ${fmtDist(hav({lat:DLB.n,lon:DLB.w},{lat:DLB.s,lon:DLB.w}))}</b></div>
-   <div class="btnbar" style="padding:8px 0 0"><button class="btn" id="dl-pick">تحديد المنطقة على الخريطة</button><button class="btn" id="dl-here">حول موقعي</button></div></div>
-  <div class="panel" style="margin-top:0"><h4>نوع الخريطة</h4><div class="chips" id="dl-layers"></div>
-   <h4 style="margin-top:12px">مستوى التفصيل (Zoom)</h4>
-   <div class="kv"><span>من</span><b id="zmin-t"></b></div><input type="range" id="zmin" min="2" max="${L0.max}" value="${zmin}">
+   <div class="btnbar" style="padding:8px 0 0"><button class="btn" id="dl-pick">تحديد المنطقة على الخريطة</button><button class="btn" id="dl-here">حول موقعي</button></div></div>`
+ :`<div class="panel"><h4>المسار</h4>
+   <button class="row" id="dl-trk" style="border:1px solid #b9c6d2;border-radius:8px"><div class="rt"><b>${T?esc(T.name):'لا توجد مسارات'}</b><small>${T?fmtDist(polyLen(T.pts)):'سجّل مسارًا أو استورد ملف GPX أو ارسم مسارًا بأداة القياس'}</small></div><span>▾</span></button>
+   <h4 style="margin-top:12px">عرض الشريط على جانبي المسار</h4><div class="chips" id="dl-w"></div>
+   <div class="note" style="margin-top:6px">ينزّل الخريطة بأعلى تفصيل حول طريقك فقط بدل منطقة كاملة — يوفّر المساحة كثيرًا.</div></div>`)+
+ `<div class="panel" style="margin-top:0"><h4>نوع الخريطة</h4><div class="chips" id="dl-layers"></div>
+   <h4 style="margin-top:12px">مستوى التفصيل</h4><div class="chips" id="dl-pre"></div>
+   <div class="kv" style="margin-top:8px"><span>من</span><b id="zmin-t"></b></div><input type="range" id="zmin" min="2" max="${L0.max}" value="${zmin}">
    <div class="kv"><span>إلى</span><b id="zmax-t"></b></div><input type="range" id="zmax" min="2" max="${L0.max}" value="${zmax}">
    <div class="kv"><span>عدد البلاطات</span><b id="dl-n"></b></div><div class="kv"><span>الحجم التقريبي</span><b id="dl-est"></b></div>
    <div class="note" id="dl-warn"></div>
-   <input class="inp" id="dl-name" style="margin-top:8px" placeholder="اسم المنطقة (مثلاً: جبال حتا)">
+   <input class="inp" id="dl-name" style="margin-top:8px" placeholder="اسم الخريطة (مثلاً: جبال حتا)">
   </div>
   <div class="btnbar" style="padding-top:0"><button class="btn pri full" id="dl-go">⬇ ابدأ التنزيل</button></div>
   <div class="sec">الخرائط المحفوظة على الجهاز</div><div class="list" id="dl-areas"></div>
   <div class="panel" id="dl-store"></div>`;
- const ly=$('#dl-layers');Object.keys(LAYERS).forEach(k=>{if(k==='custom'&&!S.custom)return;const c=document.createElement('button');c.className='chip'+(k===S.layer?' on':'');c.textContent=LAYERS[k].name;
+ $('#dm-a').onclick=()=>{DLMODE='area';renderDL()};$('#dm-t').onclick=()=>{DLMODE='trk';renderDL()};
+ const ly=$('#dl-layers');visLayers().forEach(k=>{const c=document.createElement('button');c.className='chip'+(k===lid?' on':'');c.textContent=LAYERS[k].name+' (حتى '+LAYERS[k].max+')';
   c.onclick=()=>{setBase(k);renderDL()};ly.appendChild(c)});
- const upd=()=>{let a=+$('#zmin').value,c=+$('#zmax').value;if(a>c){c=a;$('#zmax').value=c}LS.set('dlz',[a,c]);
-  const zl=z=>z+' '+(z<=8?'(دولة)':z<=11?'(منطقة)':z<=13?'(مدينة)':z<=15?'(أحياء/طرق)':'(تفصيلي)');$('#zmin-t').textContent=zl(a);$('#zmax-t').textContent=zl(c);
-  const n=countTiles(DLB,a,c);$('#dl-n').textContent=n.toLocaleString('en');$('#dl-est').textContent='~'+fmtBytes(n*L0.kb*1024);
-  const w=$('#dl-warn');const go=$('#dl-go');
-  if(L0.noBulk){w.innerHTML='⚠️ سياسة خوادم OpenStreetMap تمنع التنزيل الجماعي. اختر «طبوغرافية» أو «قمر صناعي» أو مصدرًا مخصصًا.';go.disabled=true}
-  else if(n>MAXTILES){w.textContent='⚠️ المنطقة كبيرة جدًا ('+n.toLocaleString('en')+' بلاطة). الحد '+MAXTILES.toLocaleString('en')+'. صغّر المنطقة أو قلّل أعلى مستوى تفصيل.';go.disabled=true}
-  else{w.textContent='نصيحة: للمشي استخدم حتى 15–16، وللسيارة حتى 13–14.';go.disabled=false}
-  go.style.opacity=go.disabled?.5:1};
+ const pre=$('#dl-pre');[['🚗 سيارة',14],['🥾 مشي',16],['🔍 تفصيلي',18],['⭐ أقصى',L0.max]].forEach(([t,z])=>{const c=document.createElement('button');c.className='chip';c.textContent=t+' '+Math.min(z,L0.max);
+  c.onclick=()=>{const zz=Math.min(z,L0.max);$('#zmax').value=zz;if(+$('#zmin').value>zz)$('#zmin').value=Math.max(2,zz-4);upd()};pre.appendChild(c)});
+ if(DLMODE==='trk'){$('#dl-trk').onclick=()=>{if(!trks.length)return;sheet('اختر المسار',trks.map(t=>({t:t.name,s:fmtDist(polyLen(t.pts)),sel:t===T,fn:()=>{DLTRK=t.id;renderDL()}})))};
+  const wc=$('#dl-w');[[250,'±250 م'],[500,'±500 م'],[1000,'±1 كم'],[2000,'±2 كم'],[5000,'±5 كم']].forEach(([w,t])=>{const c=document.createElement('button');c.className='chip'+(w===DLW?' on':'');c.textContent=t;c.onclick=()=>{DLW=w;renderDL()};wc.appendChild(c)})}
+ const cur=()=>{const z1=+$('#zmin').value,z2=+$('#zmax').value;
+  if(DLMODE==='area')return {lid,b:{n:DLB.n,s:DLB.s,e:DLB.e,w:DLB.w},z1,z2};
+  if(!T)return null;const pts=densify(T.pts,Math.max(100,DLW*.6)).map(p=>[+p[0].toFixed(5),+p[1].toFixed(5)]);
+  const bb=bboxOf(pts),dLat=DLW/111320,dLon=DLW/(111320*Math.cos((bb.n+bb.s)/2*D2R));
+  return {lid,b:{n:bb.n+dLat,s:bb.s-dLat,e:bb.e+dLon,w:bb.w-dLon},z1,z2,corr:{pts,w:DLW,name:T.name}}};
+ let cnt=0;
+ function upd(){let a=+$('#zmin').value,c=+$('#zmax').value;if(a>c){c=a;$('#zmax').value=c}LS.set('dlz',[a,c]);
+  $('#zmin-t').textContent=ZL(a);$('#zmax-t').textContent=ZL(c);
+  const A=cur(),go=$('#dl-go'),w=$('#dl-warn');cnt=A?areaCount(A):0;
+  $('#dl-n').textContent=cnt.toLocaleString('en');$('#dl-est').textContent='~'+fmtBytes(cnt*L0.kb/partsOf(lid).length*1024);
+  let ok=true;
+  if(!A){w.textContent='اختر مسارًا أولاً.';ok=false}
+  else if(L0.noBulk){w.innerHTML='⚠️ سياسة خوادم OpenStreetMap تمنع التنزيل الجماعي. اختر «طبوغرافية» أو «قمر صناعي» أو «شوارع تفصيلية — Esri».';ok=false}
+  else if(cnt>MAXTILES){w.textContent='⚠️ كبير جدًا ('+cnt.toLocaleString('en')+' بلاطة، الحد '+MAXTILES.toLocaleString('en')+'). صغّر المنطقة، أو قلّل أعلى مستوى، أو استخدم «على طول مسار».';ok=false}
+  else if(cnt>40000)w.textContent='⏳ تنزيل كبير — قد يستغرق وقتًا طويلًا. يمكنك الإيقاف والإكمال لاحقًا.';
+  else w.textContent=c>=18?'🔍 أعلى تفصيل: مناسب للمشي والبحث عن المداخل والمباني.':'نصيحة: للأماكن المهمة استخدم «تفصيلي» أو «أقصى»، وللطريق الطويل استخدم «على طول مسار».';
+  go.disabled=!ok;go.style.opacity=ok?1:.5}
  $('#zmin').oninput=upd;$('#zmax').oninput=upd;upd();
- $('#dl-pick').onclick=()=>{DLSEL=true;follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>{if(DLB)map.fitBounds([[DLB.s,DLB.w],[DLB.n,DLB.e]]);updMapInfo()},60)};
- $('#dl-here').onclick=()=>{if(!POS)return toast('بانتظار إشارة GPS');const d=0.05;DLB={n:POS.lat+d,s:POS.lat-d,e:POS.lon+d/Math.cos(POS.lat*D2R),w:POS.lon-d/Math.cos(POS.lat*D2R),z:13};renderDL()};
- $('#dl-go').onclick=()=>{if($('#dl-go').disabled)return;startDL($('#dl-name').value.trim()||('منطقة '+(AREAS.length+1)),+$('#zmin').value,+$('#zmax').value,lid)};
+ if(DLMODE==='area'){
+  $('#dl-pick').onclick=()=>{DLSEL=true;follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>{if(DLB)map.fitBounds([[DLB.s,DLB.w],[DLB.n,DLB.e]]);updMapInfo()},60)};
+  $('#dl-here').onclick=()=>{if(!POS)return toast('بانتظار إشارة GPS');const d=0.03;DLB={n:POS.lat+d,s:POS.lat-d,e:POS.lon+d/Math.cos(POS.lat*D2R),w:POS.lon-d/Math.cos(POS.lat*D2R),z:14};renderDL()}}
+ $('#dl-go').onclick=()=>{if($('#dl-go').disabled)return;const A=cur();if(!A)return;
+  A.name=$('#dl-name').value.trim()||(A.corr?'مسار: '+A.corr.name:'منطقة '+(AREAS.length+1));delete A.corr?.name;startDL(A)};
  const al=$('#dl-areas');if(!AREAS.length)al.innerHTML='<div class="empty">لم تُنزَّل أي خرائط بعد</div>';
  AREAS.slice().reverse().forEach(a=>{const r=document.createElement('button');r.className='row';
-  r.innerHTML=`<div class="ri" style="display:flex;align-items:center;justify-content:center;background:#16a085;border-radius:8px">${svgI('dl',24)}</div><div class="rt"><b>${esc(a.name)}</b><small>${esc((LAYERS[a.lid]||{}).name||a.lid)} • Z${a.z1}–${a.z2} • ${a.n.toLocaleString('en')} بلاطة • ${fmtBytes(a.bytes||0)}</small></div>`;
+  r.innerHTML=`<div class="ri" style="display:flex;align-items:center;justify-content:center;background:${a.corr?'#8e44c9':'#16a085'};border-radius:8px">${svgI(a.corr?'tracks':'dl',24)}</div><div class="rt"><b>${esc(a.name)}</b><small>${esc((LAYERS[a.lid]||{}).name||a.lid)} • Z${a.z1}–${a.z2}${a.corr?' • شريط ±'+fmtDist(a.corr.w):''} • ${(a.n||0).toLocaleString('en')} بلاطة • ${fmtBytes(a.bytes||0)}</small></div>`;
   r.onclick=()=>sheet(a.name,[{t:'عرض على الخريطة',fn:()=>{setBase(a.lid);follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>{map.fitBounds([[a.b.s,a.b.w],[a.b.n,a.b.e]]);showArea(a)},60)}},
-   {t:'تحديث / إكمال التنزيل',fn:()=>startDL(a.name,a.z1,a.z2,a.lid,a.b,a)},
+   {t:'تحديث / إكمال التنزيل',fn:()=>startDL(a,a)},
    {t:'حذف من الجهاز',fn:()=>setTimeout(()=>confirmIt('حذف خريطة «'+a.name+'» من الجهاز؟',async()=>{toast('جارٍ الحذف…');
-     const keys=[];for(const k of tileKeys(a.b,a.z1,a.z2,a.lid))keys.push(k.join('/'));
-     const others=AREAS.filter(x=>x!==a&&x.lid===a.lid);const keep=new Set();others.forEach(o=>{for(const k of tileKeys(o.b,o.z1,o.z2,o.lid))keep.add(k.join('/'))});
-     await tileDelKeys(keys.filter(k=>!keep.has(k)));AREAS=AREAS.filter(x=>x!==a);LS.set('areas',AREAS);renderDL();toast('تم الحذف')},'حذف'),30)}]);
+     const keep=new Set();AREAS.filter(x=>x!==a).forEach(o=>areaKeys(o).forEach(k=>keep.add(k)));
+     await tileDelKeys(areaKeys(a).filter(k=>!keep.has(k)));AREAS=AREAS.filter(x=>x!==a);LS.set('areas',AREAS);renderDL();toast('تم الحذف')},'حذف'),30)}]);
   al.appendChild(r)});
  storageInfo($('#dl-store'))}
-function showArea(a){areaLayer.clearLayers();L.rectangle([[a.b.s,a.b.w],[a.b.n,a.b.e]],{color:'#16a085',weight:2,fill:false,dashArray:'6 4'}).addTo(areaLayer);setTimeout(()=>areaLayer.clearLayers(),8000)}
+function showArea(a){areaLayer.clearLayers();
+ if(a.corr)L.polyline(a.corr.pts,{color:'#8e44c9',weight:6,opacity:.35}).addTo(areaLayer);
+ else L.rectangle([[a.b.s,a.b.w],[a.b.n,a.b.e]],{color:'#16a085',weight:2,fill:false,dashArray:'6 4'}).addTo(areaLayer);
+ setTimeout(()=>areaLayer.clearLayers(),8000)}
 async function storageInfo(el){if(!el)return;let h='<h4>التخزين</h4>';
  try{h+=`<div class="kv"><span>بلاطات محفوظة</span><b>${(await tileCount()).toLocaleString('en')}</b></div>`}catch(e){}
  if(navigator.storage&&navigator.storage.estimate){try{const e=await navigator.storage.estimate();h+=`<div class="kv"><span>المستخدم / المتاح</span><b>${fmtBytes(e.usage||0)} / ${fmtBytes(e.quota||0)}</b></div>`}catch(e){}}
  if(navigator.storage&&navigator.storage.persisted){try{const p=await navigator.storage.persisted();h+=`<div class="kv"><span>تخزين دائم</span><b>${p?'نعم ✓':'لا'}</b></div>`;if(!p)h+='<button class="btn full" id="persist" style="margin-top:6px">طلب تخزين دائم (حتى لا يحذف المتصفح الخرائط)</button>'}catch(e){}}
  el.innerHTML=h;const pb=el.querySelector('#persist');if(pb)pb.onclick=()=>navigator.storage.persist().then(ok=>{toast(ok?'تم تفعيل التخزين الدائم':'رفض المتصفح الطلب — ثبّت التطبيق على الشاشة الرئيسية ثم أعد المحاولة',4000);storageInfo(el)})}
-async function startDL(name,z1,z2,lid,b,existing){if(DLJOB)return toast('يوجد تنزيل قيد التشغيل');if(!navigator.onLine)return toast('لا يوجد اتصال بالإنترنت');
- b=b||{n:DLB.n,s:DLB.s,e:DLB.e,w:DLB.w};const total=countTiles(b,z1,z2);
+async function startDL(area,existing){if(DLJOB)return toast('يوجد تنزيل قيد التشغيل');if(!navigator.onLine)return toast('لا يوجد اتصال بالإنترنت');
+ const keys=areaKeys(area),total=keys.length;
  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
- let wl=null;try{wl=await navigator.wakeLock.request('screen')}catch(e){}
- DLJOB={name,total,done:0,skip:0,err:0,bytes:0,abort:false};go('dl',true);renderDL();
- const it=tileKeys(b,z1,z2,lid);
- const worker=async()=>{for(;;){if(DLJOB.abort)return;const n=it.next();if(n.done)return;const [l,z,x,y]=n.value,k=l+'/'+z+'/'+x+'/'+y;
+ let wl=null;try{if(NATIVE)await NATIVE.awake.keepAwake();else wl=await navigator.wakeLock.request('screen')}catch(e){}
+ DLJOB={name:area.name,total,done:0,skip:0,err:0,bytes:0,abort:false};go('dl',true);renderDL();
+ let i=0;
+ const worker=async()=>{for(;;){if(DLJOB.abort||i>=keys.length)return;const k=keys[i++],[l,z,x,y]=k.split('/');
    if(await tileHas(k)){DLJOB.skip++;DLJOB.done++;continue}
-   let ok=false;for(let tr=0;tr<3&&!ok&&!DLJOB.abort;tr++){try{const r=await fetch(tileURL(l,z,x,y),{mode:'cors'});if(r.ok){const bl=await r.blob();await tilePut(k,bl);DLJOB.bytes+=bl.size;ok=true}else if(r.status===404)break;else await new Promise(s=>setTimeout(s,800*(tr+1)))}catch(e){await new Promise(s=>setTimeout(s,800*(tr+1)))}}
-   if(!ok)DLJOB.err++;DLJOB.done++;if(DLJOB.done%8===0)dlProgress()}};
- const iv=setInterval(dlProgress,700);
+   let ok=false;for(let tr=0;tr<3&&!ok&&!DLJOB.abort;tr++){try{const r=await fetch(tileURL(l,+z,+x,+y),{mode:'cors'});if(r.ok){const bl=await r.blob();await tilePut(k,bl);DLJOB.bytes+=bl.size;ok=true}else if(r.status===404)break;else await new Promise(s=>setTimeout(s,800*(tr+1)))}catch(e){await new Promise(s=>setTimeout(s,800*(tr+1)))}}
+   if(!ok)DLJOB.err++;DLJOB.done++}};
+ const iv=setInterval(dlProgress,600);
  await Promise.all([1,2,3,4,5,6].map(worker));clearInterval(iv);
- const J=DLJOB;DLJOB=null;try{wl&&wl.release()}catch(e){}
- if(existing){existing.bytes=(existing.bytes||0)+J.bytes;existing.date=Date.now()}
- else AREAS.push({id:uid(),name,lid,b,z1,z2,n:total,bytes:J.bytes,date:Date.now()});
+ const J=DLJOB;DLJOB=null;try{if(NATIVE&&!S.wake)await NATIVE.awake.allowSleep();wl&&wl.release()}catch(e){}
+ if(existing){existing.bytes=(existing.bytes||0)+J.bytes;existing.n=total;existing.date=Date.now()}
+ else AREAS.push(Object.assign({id:uid(),n:total,bytes:J.bytes,date:Date.now()},area));
  LS.set('areas',AREAS);toast(J.abort?'تم إيقاف التنزيل (المحفوظ يبقى متاحًا)':`اكتمل التنزيل ✓ ${J.done-J.err}/${J.total}`+(J.err?` — أخطاء: ${J.err}`:''),4500);
  if(CURV==='dl')renderDL()}
 function dlProgress(){if(!DLJOB||CURV!=='dl')return;const b=$('#dl-bar');if(!b)return;b.style.width=(DLJOB.done/DLJOB.total*100).toFixed(1)+'%';
@@ -1637,7 +1752,7 @@ function renderSetup(){const l=$('#setup-list');l.innerHTML='';
  row('حذف كل النقاط','',()=>confirmIt('حذف جميع نقاط الطريق ('+WPTS.length+')؟',()=>{WPTS=[];saveW();drawWpts()},'حذف'));
  sec('حول');
  row('Trek 650','ملاح GPS للويب • بيانات الخرائط © OpenStreetMap وغيرها',()=>{});}
-function layerSheet(){sheet('نوع الخريطة',Object.keys(LAYERS).filter(k=>k!=='custom'||S.custom).map(k=>({t:LAYERS[k].name,sel:S.layer===k,fn:()=>{setBase(k);if(CURV==='setup')renderSetup()}})))}
+function layerSheet(){sheet('نوع الخريطة',visLayers().map(k=>({t:LAYERS[k].name,sel:S.layer===k,fn:()=>{setBase(k);if(CURV==='setup')renderSetup()}})))}
 
 /* ============ page menus (≡) ============ */
 const PAGEMENU={
@@ -1645,10 +1760,10 @@ const PAGEMENU={
   {t:'نوع الخريطة',s:layerDef(S.layer).name,fn:()=>setTimeout(layerSheet,30)},
   {t:'حفظ نقطة عند المؤشر',fn:()=>{const c=follow&&POS?{lat:POS.lat,lng:POS.lon}:map.getCenter();const w=addWpt(c.lat,c.lng,null,follow&&POS?POS.alt:null);toast('تم حفظ '+w.name)}},
   {t:'قياس مسافة / مساحة',fn:measStart},
-  {t:'تنزيل المنطقة المعروضة',fn:()=>{DLB=boundsObj();go('dl')}},
+  {t:'تنزيل المنطقة المعروضة',fn:()=>{DLMODE='area';DLB=boundsObj();go('dl')}},
   ...(DEST?[{t:'إيقاف الملاحة',s:DEST.name,fn:stopNav}]:[]),
   {t:'تغيير حقول البيانات',s:'أو اضغط على الحقل مباشرة',fn:()=>setTimeout(()=>document.querySelector('#v-map .fld').click(),30)}]),
- wpts:()=>sheet('إدارة النقاط',[{t:'نقطة جديدة بالإحداثيات',fn:()=>{COEDIT=null;$('#co-in').value='';go('coord')}},{t:'استيراد GPX / KML',fn:pickFile},
+ wpts:()=>sheet('إدارة النقاط',[{t:'نقطة جديدة بالإحداثيات',fn:()=>{COEDIT=null;$('#co-in').value='';DPR=[];go('coord')}},{t:'استيراد GPX / KML',fn:pickFile},
   {t:'تصدير كل النقاط GPX',fn:()=>exportGPX(WPTS,[],'Waypoints_'+new Date().toISOString().slice(0,10))},
   {t:'حذف كل النقاط',fn:()=>setTimeout(()=>confirmIt('حذف جميع النقاط؟',()=>{WPTS=[];saveW();drawWpts();renderWpts()},'حذف'),30)}]),
  tracks:()=>sheet('المسارات',[{t:'استيراد GPX / KML',fn:pickFile},{t:'تصدير كل المسارات GPX',fn:()=>exportGPX([],TRACKS.concat(CUR.pts.length>1?[{name:'Current Track',pts:CUR.pts}]:[]),'Tracks_'+new Date().toISOString().slice(0,10))},
