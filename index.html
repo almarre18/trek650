@@ -824,6 +824,16 @@ input[type=range]{width:100%;direction:ltr}
 .dp-lit{font:800 22px system-ui,sans-serif;color:#33475a;flex:none;padding:0 1px}
 .dp-gap{flex:none;width:10px}
 #dp.bad .dp-box{border-color:#d33;background:#fff4f4}
+.dp-col.sel .dp-box{background:#ffe9a8;border-color:#e0a000;box-shadow:inset 0 0 0 2px #e0a000}
+#dp-pad{position:sticky;bottom:0;z-index:5;margin-top:auto;background:linear-gradient(#3b4957,#1f2932);padding:8px 8px 10px;border-top:1px solid #0a1016;display:none;direction:ltr;box-shadow:0 -4px 12px #0004}
+.pad-info{color:#cfe0ef;font-size:12.5px;text-align:center;margin-bottom:6px;direction:rtl}
+.pad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pad-grid.let{grid-template-columns:repeat(5,1fr)}
+.pad-grid button{height:54px;border-radius:11px;border:1px solid #0b1117;background:linear-gradient(#fdfefe,#d3dee8);font:700 26px system-ui,-apple-system,sans-serif;color:#111;touch-action:manipulation;box-shadow:inset 0 1px 0 #fff}
+.pad-grid.let button{height:46px;font-size:20px}
+.pad-grid button.nav{background:linear-gradient(#677685,#3a4651);color:#fff;font-size:22px}
+.pad-grid button:active{background:#b7d0ea}
+.pad-done{margin-top:6px;width:100%;height:46px;border-radius:10px;border:1px solid #0f4b8f;background:linear-gradient(#3d93ea,#1662b8);color:#fff;font:700 17px system-ui,sans-serif;touch-action:manipulation}
 </style>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -903,7 +913,7 @@ input[type=range]{width:100%;direction:ltr}
      <div id="dp-wrap">
       <div class="chips" id="dp-fmts" style="margin:10px 0 2px;direction:ltr"></div>
       <div id="dp"></div>
-      <div class="note" style="margin-top:8px;text-align:center">اضغط ▲ ▼ أو اسحب الرقم للأعلى/للأسفل • اضغط مطوّلاً للتسريع</div>
+      <div class="note" style="margin-top:8px;text-align:center">اضغط على أي رقم لإدخاله بلوحة الأرقام • أو استخدم ▲ ▼ والسحب</div>
      </div>
      <div id="co-typed" style="display:none;margin-top:10px">
       <input class="inp ltr" id="co-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="N25°12.289' E055°16.247'">
@@ -914,6 +924,7 @@ input[type=range]{width:100%;direction:ltr}
     </div>
     <div class="panel" id="co-out" style="margin-top:0"></div>
     <div class="btnbar" id="co-btns"></div>
+    <div id="dp-pad"></div>
    </section>
 
    <!-- SETUP -->
@@ -1428,7 +1439,7 @@ const DPT={DDM:{rows:["H##°##.###'","W###°##.###'"],lab:['خط العرض','خ
  UTM:{rows:['##B','#######','#######'],lab:['المنطقة والحزام (Zone)','الشرقي (Easting)','الشمالي (Northing)']},
  MGRS:{rows:['##B CC','#####','#####'],lab:['المنطقة ومربع 100 كم','الشرقي (Easting)','الشمالي (Northing)']}};
 const DPSET={'#':'0123456789',H:'NS',W:'EW',B:'CDEFGHJKLMNPQRSTUVWX',C:'ABCDEFGHJKLMNPQRSTUVWXYZ'};
-let DPF=null,DPR=[];
+let DPF=null,DPR=[],DPC=[],DPI=-1;
 function dpFromLL(f,lat,lon){
  if(f==='DDM')return [fDDM(lat,1),fDDM(lon,0)];if(f==='DD')return [fDD(lat,1),fDD(lon,0)];if(f==='DMS')return [fDMS(lat,1),fDMS(lon,0)];
  const u=ll2utm(lat,lon);if(!u)return null;
@@ -1443,26 +1454,40 @@ function dpLoad(f){f=DPT[f]?f:'DDM';const p=parseCoord($('#co-in').value)||(POS?
 function dpHold(btn,fn){let t1,t2;const stop=()=>{clearTimeout(t1);clearInterval(t2)};
  btn.addEventListener('pointerdown',e=>{e.preventDefault();stop();fn();t1=setTimeout(()=>{t2=setInterval(fn,80)},420)});
  ['pointerup','pointerleave','pointercancel'].forEach(ev=>btn.addEventListener(ev,stop));btn.addEventListener('contextmenu',e=>e.preventDefault())}
-function dpRender(){const el=$('#dp'),T=DPT[DPF];el.innerHTML='';
+function dpRender(){const el=$('#dp'),T=DPT[DPF];el.innerHTML='';DPC=[];DPI=-1;dpPad();
  T.rows.forEach((tpl,ri)=>{const lb=document.createElement('div');lb.className='dp-lbl';lb.textContent=T.lab[ri];el.appendChild(lb);
   const row=document.createElement('div');row.className='dp-row';
   [...tpl].forEach((ch,ci)=>{
    if(DPSET[ch]){const col=document.createElement('div');col.className='dp-col'+(ch==='H'||ch==='W'?' hem':'');
     col.innerHTML='<button type="button" aria-label="زيادة">▲</button><div class="dp-box"></div><button type="button" aria-label="نقص">▼</button>';
-    const box=col.children[1];box.textContent=DPR[ri][ci];
+    const box=col.children[1];box.textContent=DPR[ri][ci];const idx=DPC.length;DPC.push({ri,ci,ch,col,box});
     const step=d=>{const set=DPSET[ch];let i=set.indexOf(DPR[ri][ci]);if(i<0)i=0;i=(i+d+set.length)%set.length;
      DPR[ri]=DPR[ri].slice(0,ci)+set[i]+DPR[ri].slice(ci+1);box.textContent=set[i];col.classList.add('flash');clearTimeout(col._f);col._f=setTimeout(()=>col.classList.remove('flash'),250);dpSync()};
     dpHold(col.children[0],()=>step(1));dpHold(col.children[2],()=>step(-1));
-    let sy=null;box.addEventListener('pointerdown',e=>{sy=e.clientY;try{box.setPointerCapture(e.pointerId)}catch(_){}});
-    box.addEventListener('pointermove',e=>{if(sy==null)return;const dy=e.clientY-sy;if(Math.abs(dy)>=20){step(dy<0?1:-1);sy=e.clientY}});
-    ['pointerup','pointercancel'].forEach(ev=>box.addEventListener(ev,()=>sy=null));
+    let sy=null,moved=false;box.addEventListener('pointerdown',e=>{sy=e.clientY;moved=false;try{box.setPointerCapture(e.pointerId)}catch(_){}});
+    box.addEventListener('pointermove',e=>{if(sy==null)return;const dy=e.clientY-sy;if(Math.abs(dy)>=20){moved=true;step(dy<0?1:-1);sy=e.clientY}});
+    box.addEventListener('pointerup',()=>{if(sy!=null&&!moved)dpSelect(idx);sy=null});box.addEventListener('pointercancel',()=>sy=null);
     row.appendChild(col)}
    else if(ch===' '){const g=document.createElement('span');g.className='dp-gap';row.appendChild(g)}
    else{const s=document.createElement('span');s.className='dp-lit';s.textContent=ch;row.appendChild(s)}});
   el.appendChild(row)});dpSync()}
+function dpSelect(i){DPI=i;DPC.forEach((c,k)=>c.col.classList.toggle('sel',k===i));dpPad();
+ if(i>=0)setTimeout(()=>DPC[i]&&DPC[i].col.scrollIntoView({block:'nearest',behavior:'smooth'}),30)}
+function dpSet(i,v){const c=DPC[i];DPR[c.ri]=DPR[c.ri].slice(0,c.ci)+v+DPR[c.ri].slice(c.ci+1);c.box.textContent=v;dpSync()}
+function dpPad(){const p=$('#dp-pad');if(DPI<0||!DPC[DPI]){p.style.display='none';p.innerHTML='';return}
+ p.style.display='block';const c=DPC[DPI],num=c.ch==='#',keys=num?['1','2','3','4','5','6','7','8','9','◀','0','▶']:[...DPSET[c.ch],'◀','▶'];
+ const what=c.ch==='H'?'شمال N / جنوب S':c.ch==='W'?'شرق E / غرب W':c.ch==='B'?'حرف الحزام (Band)':c.ch==='C'?'حرف مربع 100 كم':'رقم';
+ p.innerHTML=`<div class="pad-info">${DPT[DPF].lab[c.ri]} — ${what}</div><div class="pad-grid ${num||keys.length<=4?'':'let'}">`+
+  keys.map(k=>`<button type="button" data-k="${k}" class="${k==='◀'||k==='▶'?'nav':''}">${k}</button>`).join('')+'</div><button type="button" class="pad-done">تم ✓</button>';
+ if(!num&&keys.length<=4)p.querySelector('.pad-grid').style.gridTemplateColumns='repeat(4,1fr)';
+ p.querySelectorAll('.pad-grid button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;
+  if(k==='◀')return dpSelect(Math.max(0,DPI-1));if(k==='▶')return dpSelect(Math.min(DPC.length-1,DPI+1));
+  dpSet(DPI,k);c.col.classList.add('flash');setTimeout(()=>c.col.classList.remove('flash'),200);
+  if(DPI<DPC.length-1)dpSelect(DPI+1);else dpSelect(-1)});
+ p.querySelector('.pad-done').onclick=()=>dpSelect(-1)}
 function dpSync(){if(!DPR.length)return;const t=dpText();$('#dp').classList.toggle('bad',!parseCoord(t));$('#co-in').value=t;coPreview()}
 function coModeUI(){const dp=S.coMode!=='kb';$('#dp-wrap').style.display=dp?'':'none';$('#co-typed').style.display=dp?'none':'';$('#co-mode').textContent=dp?'⌨ كتابة':'▦ أرقام';}
-$('#co-mode').onclick=()=>{S.coMode=S.coMode==='kb'?'dp':'kb';saveS();coModeUI();if(S.coMode!=='kb')dpLoad(DPF||(S.fmt==='DEC'?'DD':S.fmt));else $('#co-in').focus()};
+$('#co-mode').onclick=()=>{dpSelect(-1);S.coMode=S.coMode==='kb'?'dp':'kb';saveS();coModeUI();if(S.coMode!=='kb')dpLoad(DPF||(S.fmt==='DEC'?'DD':S.fmt));else $('#co-in').focus()};
 function renderCoord(){const inp=$('#co-in');if(!inp.value&&POS)inp.value=fmtLL(POS.lat,POS.lon);coModeUI();if(S.coMode!=='kb')dpLoad(DPF||(S.fmt==='DEC'?'DD':S.fmt));coPreview();
  const bb=$('#co-btns');bb.innerHTML=COEDIT?'<button class="btn pri full" id="co-apply">تطبيق على النقطة</button>':
   '<button class="btn pri" id="co-save">حفظ كنقطة</button><button class="btn" id="co-go">انطلق</button>';
