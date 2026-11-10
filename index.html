@@ -940,7 +940,7 @@ input[type=range]{width:100%;direction:ltr}
  </div>
  <div class="brand"><i></i><b>TREK 650</b><i></i></div>
 </div>
-<input type="file" id="file-in" accept=".gpx,.kml,.xml,application/gpx+xml" multiple hidden>
+<input type="file" id="file-in" accept=".gpx,.kml,.kmz,.xml,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple hidden>
 
 <script>/* @preserve
  * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
@@ -1166,14 +1166,17 @@ function initMap(){
  $('#locbtn').onclick=()=>{follow=true;$('#locbtn').classList.add('follow');$('#cross').classList.remove('on');if(POS)map.setView([POS.lat,POS.lon],Math.max(map.getZoom(),15));else toast('بانتظار إشارة GPS…');updMapInfo()};
  map.on('dragstart',()=>{follow=false;$('#locbtn').classList.remove('follow');$('#cross').classList.add('on')});
  map.on('move',()=>{updMapInfo();updScale()});
- map.on('moveend',()=>{const c=map.getCenter();LS.set('view',[+c.lat.toFixed(5),+c.lng.toFixed(5),map.getZoom()])});
+ map.on('moveend',()=>{drawWpts();const c=map.getCenter();LS.set('view',[+c.lat.toFixed(5),+c.lng.toFixed(5),map.getZoom()])});
  map.on('contextmenu',e=>{if(MEAS.on)return;pointMenu(e.latlng.lat,e.latlng.lng)});
  map.on('click',e=>{if(MEAS.on)measAdd(e.latlng)});
  drawWpts();drawTracks();drawCur();drawDest();updScale();
 }
 function updScale(){const z=map.getZoom(),c=map.getCenter();const mpp=156543.03392*Math.cos(c.lat*D2R)/Math.pow(2,z);$('#scaleTxt').textContent=fmtDist(mpp*80)+' ⟷'}
-function drawWpts(){wptLayer.clearLayers();WPTS.forEach(w=>{
- L.marker([w.lat,w.lon],{icon:L.divIcon({className:'',html:`<div class="wpt-ic">${FLAG()}<span>${esc(w.name)}</span></div>`,iconSize:[24,28],iconAnchor:[4,27]})})
+// Draw only the waypoints inside the visible map (fast even with thousands of imported points).
+function drawWpts(){if(!map)return;wptLayer.clearLayers();if(S.hideWpts)return;const b=map.getBounds().pad(.3);
+ let vis=WPTS.filter(w=>b.contains([w.lat,w.lon]));const many=vis.length>150;
+ if(vis.length>600){const c=map.getCenter();vis=vis.map(w=>[w,(w.lat-c.lat)**2+(w.lon-c.lng)**2]).sort((a,b)=>a[1]-b[1]).slice(0,600).map(x=>x[0])}
+ vis.forEach(w=>{L.marker([w.lat,w.lon],{icon:L.divIcon({className:'',html:`<div class="wpt-ic">${FLAG(w.color)}${many?'':`<span>${esc(w.name)}</span>`}</div>`,iconSize:[24,28],iconAnchor:[4,27]}),title:w.name})
  .on('click',()=>{if(!MEAS.on)openWpt(w.id)}).addTo(wptLayer)})}
 const TCOL=['#e8213a','#0b8f3a','#7a2ccf','#ff8c00','#00838f','#c2185b','#4e342e','#1a237e'];
 function drawTracks(){trkLayer.clearLayers();TRACKS.forEach(t=>{if(t.show!==false&&t.pts.length>1)L.polyline(t.pts.map(p=>[p[0],p[1]]),{color:t.color||'#e8213a',weight:4,opacity:.85}).addTo(trkLayer)})}
@@ -1357,12 +1360,14 @@ function stopNav(){DEST=null;LS.set('dest',null);drawDest();toast('تم إيقا
 function distStr(w){if(!POS)return '';return fmtDist(hav(POS,w))+' '+arrowFor(bearing(POS,w))}
 function arrowFor(b){const h=curHeading();const r=h!=null?b-h:b;return `<span style="display:inline-block;transform:rotate(${r}deg)">↑</span>`}
 function renderWpts(){const q=($('#wpt-search').value||'').trim().toLowerCase();const l=$('#wpt-list');
- let arr=WPTS.filter(w=>!q||w.name.toLowerCase().includes(q));
+ let arr=WPTS.filter(w=>!q||w.name.toLowerCase().includes(q)||(w.grp||'').toLowerCase().includes(q));
+ if(arr.length>500&&!q){arr=POS?arr.slice().sort((a,b)=>hav(POS,a)-hav(POS,b)).slice(0,500):arr.slice(-500)}
  if(POS)arr=arr.slice().sort((a,b)=>hav(POS,a)-hav(POS,b));else arr=arr.slice().reverse();
  l.innerHTML=arr.length?'':'<div class="empty">لا توجد نقاط بعد.<br>استخدم «تحديد نقطة»، أو اضغط مطوّلاً على الخريطة،<br>أو استورد ملف GPX من جهاز جارمن (≡ القائمة).</div>';
  arr.forEach(w=>{const r=document.createElement('button');r.className='row';r.dataset.id=w.id;
-  r.innerHTML=`<div class="ri">${FLAG()}</div><div class="rt"><b>${esc(w.name)}</b><small>${esc(fmtLL(w.lat,w.lon))}</small></div><div class="rv">${distStr(w)}</div>`;
-  r.onclick=()=>openWpt(w.id);l.appendChild(r)})}
+  r.innerHTML=`<div class="ri">${FLAG(w.color)}</div><div class="rt"><b>${esc(w.name)}</b><small>${esc(fmtLL(w.lat,w.lon))}</small>${w.grp?`<small style="direction:rtl">📁 ${esc(w.grp)}</small>`:''}</div><div class="rv">${distStr(w)}</div>`;
+  r.onclick=()=>openWpt(w.id);l.appendChild(r)});
+ if(WPTS.length>500&&!q){const n=document.createElement('div');n.className='empty';n.textContent='يتم عرض أقرب 500 نقطة من '+WPTS.length+' — استخدم البحث للباقي';l.appendChild(n)}}
 $('#wpt-search').oninput=renderWpts;
 function updDistances(){document.querySelectorAll('#wpt-list .row,#where-list .row[data-id]').forEach(r=>{const w=WPTS.find(x=>x.id===r.dataset.id);if(w)r.querySelector('.rv').innerHTML=distStr(w)})}
 function renderWpt(){const w=WPTS.find(x=>x.id===CURW),el=$('#wpt-detail');if(!w){el.innerHTML='<div class="empty">النقطة غير موجودة</div>';return}
@@ -1603,24 +1608,48 @@ function exportGPX(wpts,trks,name){const fn=safeName(name)+'.gpx',txt=toGPX(wpts
  let file=null;try{file=new File([blob],fn,{type:'application/gpx+xml'})}catch(e){}
  if(file&&navigator.canShare&&navigator.canShare({files:[file]}))sheet('تصدير '+fn,[{t:'تنزيل الملف',fn:dl},{t:'مشاركة (واتساب، بريد، Drive…)',fn:()=>navigator.share({files:[file],title:fn}).catch(()=>{})}]);
  else dl()}
-function importFiles(files){let nw=0,nt=0,pending=files.length;
- [...files].forEach(f=>{const r=new FileReader();r.onload=()=>{try{const res=parseGeo(r.result);nw+=res.w;nt+=res.t}catch(e){toast('تعذّرت قراءة '+f.name)}
-  if(--pending===0){saveW();saveT();drawWpts();drawTracks();toast(`تم الاستيراد: ${nw} نقطة، ${nt} مسار`,3500);render(CURV)}};r.readAsText(f)})}
-function parseGeo(txt){const doc=new DOMParser().parseFromString(txt,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('xml');
+function importFiles(files){let nw=0,nt=0,pending=files.length;toast('جارٍ الاستيراد…');
+ [...files].forEach(f=>{const r=new FileReader();r.onload=async()=>{try{const txt=await fileText(new Uint8Array(r.result),f.name);const res=parseGeo(txt,f.name.replace(/\.(gpx|kml|kmz|xml)$/i,''));nw+=res.w;nt+=res.t}catch(e){toast('تعذّرت قراءة '+f.name+(e&&e.message==='kmz'?' — صدّر الملف بصيغة KML':''),4000)}
+  if(--pending===0){const ok=saveW()&&saveT();drawWpts();drawTracks();if(ok)toast(`تم الاستيراد: ${nw} نقطة، ${nt} مسار`,3500);render(CURV)}};r.readAsArrayBuffer(f)})}
+// Read GPX/KML text; KMZ is a ZIP holding doc.kml.
+async function fileText(u8,name){if(u8[0]===0x50&&u8[1]===0x4b)return unzipKml(u8);return new TextDecoder('utf-8').decode(u8)}
+async function unzipKml(u8){const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);let e=-1;
+ for(let i=u8.length-22;i>=Math.max(0,u8.length-65558);i--)if(dv.getUint32(i,true)===0x06054b50){e=i;break}
+ if(e<0)throw new Error('kmz');let p=dv.getUint32(e+16,true);const n=dv.getUint16(e+10,true);const ents=[];
+ for(let k=0;k<n;k++){if(dv.getUint32(p,true)!==0x02014b50)break;const meth=dv.getUint16(p+10,true),csz=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),off=dv.getUint32(p+42,true);
+  ents.push({name:new TextDecoder().decode(u8.subarray(p+46,p+46+nl)),meth,csz,off});p+=46+nl+el+cl}
+ const ent=ents.find(x=>/(^|\/)doc\.kml$/i.test(x.name))||ents.find(x=>/\.kml$/i.test(x.name));if(!ent)throw new Error('kmz');
+ const lo=ent.off,data=u8.subarray(lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true));const comp=data.subarray(0,ent.csz);
+ if(ent.meth===0)return new TextDecoder().decode(comp);
+ if(ent.meth!==8||typeof DecompressionStream==='undefined')throw new Error('kmz');
+ const ds=new Blob([comp]).stream().pipeThrough(new DecompressionStream('deflate-raw'));return await new Response(ds).text()}
+const kmlColor=c=>{if(!c||c.length<8)return null;return '#'+c.slice(6,8)+c.slice(4,6)+c.slice(2,4)};
+const stripHtml=h=>{if(!h)return '';const d=document.createElement('div');d.innerHTML=h.replace(/<br\s*\/?>/gi,'\n');return d.textContent.trim().slice(0,500)};
+function parseGeo(txt,fname){const doc=new DOMParser().parseFromString(txt,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('xml');
  const tag=(el,n)=>{const x=el.getElementsByTagName(n)[0];return x?x.textContent.trim():null};let w=0,t=0;
  const exists=new Set(WPTS.map(x=>x.name+'|'+x.lat.toFixed(5)+'|'+x.lon.toFixed(5)));
- [...doc.getElementsByTagName('wpt')].forEach(e=>{const lat=+e.getAttribute('lat'),lon=+e.getAttribute('lon');if(!isFinite(lat)||!isFinite(lon))return;
-  const name=tag(e,'name')||nextName();if(exists.has(name+'|'+lat.toFixed(5)+'|'+lon.toFixed(5)))return;
-  const ele=tag(e,'ele'),tm=tag(e,'time');WPTS.push({id:uid(),name,lat,lon,ele:ele!=null?Math.round(+ele):null,time:tm?Date.parse(tm)||Date.now():Date.now(),sym:tag(e,'sym')||'Flag, Blue',desc:tag(e,'desc')||tag(e,'cmt')||''});w++});
+ const addW=o=>{if(!isFinite(o.lat)||!isFinite(o.lon)||Math.abs(o.lat)>90||Math.abs(o.lon)>180)return;const k=o.name+'|'+o.lat.toFixed(5)+'|'+o.lon.toFixed(5);if(exists.has(k))return;exists.add(k);
+  WPTS.push(Object.assign({id:uid(),time:Date.now(),sym:'Flag, Blue'},o));w++};
+ const tex=new Set(TRACKS.map(x=>x.name+'|'+x.pts.length+'|'+x.pts[0][0]+'|'+x.pts[0][1]));
+ const addT=(name,pts,color)=>{pts=pts.filter(p=>isFinite(p[0])&&isFinite(p[1]));if(pts.length<2)return;const k=name+'|'+pts.length+'|'+pts[0][0]+'|'+pts[0][1];if(tex.has(k))return;tex.add(k);TRACKS.push({id:uid(),name,color:color||TCOL[TRACKS.length%TCOL.length],pts,show:true,time:Date.now()});t++};
+ // GPX
+ [...doc.getElementsByTagName('wpt')].forEach(e=>{const ele=tag(e,'ele'),tm=tag(e,'time');
+  addW({name:tag(e,'name')||nextName(),lat:+e.getAttribute('lat'),lon:+e.getAttribute('lon'),ele:ele!=null?Math.round(+ele):null,time:tm?Date.parse(tm)||Date.now():Date.now(),sym:tag(e,'sym')||'Flag, Blue',desc:tag(e,'desc')||tag(e,'cmt')||'',grp:fname||''})});
  const pt=e=>{const ele=tag(e,'ele'),tm=tag(e,'time');return [+(+e.getAttribute('lat')).toFixed(6),+(+e.getAttribute('lon')).toFixed(6),ele!=null?Math.round(+ele):null,tm?Date.parse(tm)||null:null]};
- [...doc.getElementsByTagName('trk')].forEach(e=>{const pts=[...e.getElementsByTagName('trkpt')].map(pt);if(pts.length<2)return;
-  TRACKS.push({id:uid(),name:tag(e,'name')||'مسار مستورد',color:TCOL[TRACKS.length%TCOL.length],pts,show:true,time:Date.now()});t++});
- [...doc.getElementsByTagName('rte')].forEach(e=>{const pts=[...e.getElementsByTagName('rtept')].map(pt);if(pts.length<2)return;
-  TRACKS.push({id:uid(),name:(tag(e,'name')||'مسار')+' (Route)',color:'#d1149c',pts,show:true,time:Date.now()});t++});
- [...doc.getElementsByTagName('Placemark')].forEach(e=>{const name=tag(e,'name');const pnt=e.getElementsByTagName('Point')[0],ls=e.getElementsByTagName('LineString')[0];
-  if(pnt){const c=tag(pnt,'coordinates').split(',').map(Number);if(c.length>=2){WPTS.push({id:uid(),name:name||nextName(),lat:c[1],lon:c[0],ele:c[2]!=null&&!isNaN(c[2])?Math.round(c[2]):null,time:Date.now(),sym:'Flag, Blue'});w++}}
-  else if(ls){const pts=tag(ls,'coordinates').split(/\s+/).filter(Boolean).map(s=>{const c=s.split(',').map(Number);return [c[1],c[0],c[2]!=null&&!isNaN(c[2])?Math.round(c[2]):null,null]});
-   if(pts.length>1){TRACKS.push({id:uid(),name:name||'مسار KML',color:TCOL[TRACKS.length%TCOL.length],pts,show:true,time:Date.now()});t++}}});
+ [...doc.getElementsByTagName('trk')].forEach(e=>addT(tag(e,'name')||'مسار مستورد',[...e.getElementsByTagName('trkpt')].map(pt)));
+ [...doc.getElementsByTagName('rte')].forEach(e=>addT((tag(e,'name')||'مسار')+' (Route)',[...e.getElementsByTagName('rtept')].map(pt),'#d1149c'));
+ // KML (Google My Maps / Google Earth)
+ const styles={};[...doc.getElementsByTagName('Style')].forEach(st=>{const id=st.getAttribute('id');if(!id)return;const ls=st.getElementsByTagName('LineStyle')[0],is=st.getElementsByTagName('IconStyle')[0];
+  styles['#'+id]={line:ls?kmlColor(tag(ls,'color')):null,icon:is?kmlColor(tag(is,'color')):null}});
+ [...doc.getElementsByTagName('StyleMap')].forEach(sm=>{const id=sm.getAttribute('id');const pr=[...sm.getElementsByTagName('Pair')].find(p=>tag(p,'key')==='normal');if(id&&pr)styles['#'+id]=styles[tag(pr,'styleUrl')]||{}});
+ const coords=s=>(s||'').trim().split(/\s+/).filter(Boolean).map(c=>{const a=c.split(',').map(Number);return [+a[1].toFixed(6),+a[0].toFixed(6),a[2]!=null&&!isNaN(a[2])&&a[2]!==0?Math.round(a[2]):null,null]});
+ [...doc.getElementsByTagName('Placemark')].forEach(e=>{const name=tag(e,'name')||'';let fo=e.parentNode,grp='';while(fo&&fo.nodeName!=='Folder'&&fo.nodeName!=='Document')fo=fo.parentNode;
+  if(fo){const n=[...fo.children].find(c=>c.nodeName==='name');grp=n?n.textContent.trim():''}grp=grp||fname||'';
+  const st=styles[tag(e,'styleUrl')]||{},desc=stripHtml(tag(e,'description'));
+  [...e.getElementsByTagName('Point')].forEach(p=>{const c=coords(tag(p,'coordinates'))[0];if(c)addW({name:name||nextName(),lat:c[0],lon:c[1],ele:c[2],desc,grp,color:st.icon||undefined})});
+  const lines=[...e.getElementsByTagName('LineString')];lines.forEach((ls,i)=>addT((name||'مسار KML')+(lines.length>1?' '+(i+1):''),coords(tag(ls,'coordinates')),st.line));
+  [...e.getElementsByTagName('Polygon')].forEach(pg=>{const ob=pg.getElementsByTagName('outerBoundaryIs')[0]||pg;addT((name||'منطقة')+' (حدود)',coords(tag(ob,'coordinates')),st.line||'#ff8c00')});
+  const gx=[...e.getElementsByTagNameNS('*','coord')];if(gx.length>1)addT(name||'مسار',gx.map(c=>{const a=c.textContent.trim().split(/\s+/).map(Number);return [+a[1].toFixed(6),+a[0].toFixed(6),a[2]?Math.round(a[2]):null,null]}),st.line)});
  return {w,t}}
 if(NATIVE)$('#file-in').removeAttribute('accept');
 $('#file-in').onchange=e=>{if(e.target.files.length)importFiles(e.target.files);e.target.value=''};
@@ -1777,6 +1806,11 @@ function renderSetup(){const l=$('#setup-list');l.innerHTML='';
  row('حذف كل النقاط','',()=>confirmIt('حذف جميع نقاط الطريق ('+WPTS.length+')؟',()=>{WPTS=[];saveW();drawWpts()},'حذف'));
  sec('حول');
  row('Trek 650','ملاح GPS للويب • بيانات الخرائط © OpenStreetMap وغيرها',()=>{});}
+function groupSheet(){const g={};WPTS.forEach(w=>{const k=w.grp||'(بدون مجموعة)';g[k]=(g[k]||0)+1});const ks=Object.keys(g);if(!ks.length)return toast('لا توجد نقاط');
+ sheet('المجموعات',ks.map(k=>({t:k,s:g[k]+' نقطة',fn:()=>setTimeout(()=>{const inG=w=>(w.grp||'(بدون مجموعة)')===k;sheet(k,[
+  {t:'عرض النقاط في القائمة',fn:()=>{$('#wpt-search').value=k==='(بدون مجموعة)'?'':k;go('wpts');renderWpts()}},
+  {t:'تصدير المجموعة GPX (لجهاز الجارمن)',fn:()=>exportGPX(WPTS.filter(inG),[],k)},
+  {t:'حذف المجموعة ('+g[k]+' نقطة)',fn:()=>setTimeout(()=>confirmIt('حذف كل نقاط «'+k+'»؟',()=>{WPTS=WPTS.filter(w=>!inG(w));saveW();drawWpts();renderWpts()},'حذف'),30)}])},30)})))}
 function layerSheet(){sheet('نوع الخريطة',visLayers().map(k=>({t:LAYERS[k].name,sel:S.layer===k,fn:()=>{setBase(k);if(CURV==='setup')renderSetup()}})))}
 
 /* ============ page menus (≡) ============ */
@@ -1790,6 +1824,8 @@ const PAGEMENU={
   {t:'تغيير حقول البيانات',s:'أو اضغط على الحقل مباشرة',fn:()=>setTimeout(()=>document.querySelector('#v-map .fld').click(),30)}]),
  wpts:()=>sheet('إدارة النقاط',[{t:'نقطة جديدة بالإحداثيات',fn:()=>{COEDIT=null;$('#co-in').value='';DPR=[];go('coord')}},{t:'استيراد GPX / KML',fn:pickFile},
   {t:'تصدير كل النقاط GPX',fn:()=>exportGPX(WPTS,[],'Waypoints_'+new Date().toISOString().slice(0,10))},
+  {t:'المجموعات المستوردة',s:'تصدير أو حذف مجموعة كاملة',fn:()=>setTimeout(groupSheet,30)},
+  {t:S.hideWpts?'إظهار النقاط على الخريطة':'إخفاء النقاط من الخريطة',fn:()=>{S.hideWpts=!S.hideWpts;saveS();drawWpts()}},
   {t:'حذف كل النقاط',fn:()=>setTimeout(()=>confirmIt('حذف جميع النقاط؟',()=>{WPTS=[];saveW();drawWpts();renderWpts()},'حذف'),30)}]),
  tracks:()=>sheet('المسارات',[{t:'استيراد GPX / KML',fn:pickFile},{t:'تصدير كل المسارات GPX',fn:()=>exportGPX([],TRACKS.concat(CUR.pts.length>1?[{name:'Current Track',pts:CUR.pts}]:[]),'Tracks_'+new Date().toISOString().slice(0,10))},
   {t:'إظهار الكل',fn:()=>{TRACKS.forEach(t=>t.show=true);saveT();drawTracks();renderTracks()}},{t:'إخفاء الكل',fn:()=>{TRACKS.forEach(t=>t.show=false);saveT();drawTracks();renderTracks()}}]),
