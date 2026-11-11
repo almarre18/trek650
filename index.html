@@ -834,7 +834,7 @@ input[type=range]{width:100%;direction:ltr}
 .pad-grid button.nav{background:linear-gradient(#677685,#3a4651);color:#fff;font-size:22px}
 .pad-grid button:active{background:#b7d0ea}
 .pad-done{margin-top:6px;width:100%;height:46px;border-radius:10px;border:1px solid #0f4b8f;background:linear-gradient(#3d93ea,#1662b8);color:#fff;font:700 17px system-ui,sans-serif;touch-action:manipulation}
-#v-menu{background:linear-gradient(#00000022,#00000055),var(--bgimg) center/cover no-repeat!important}
+#v-menu{background:linear-gradient(#00000022,#00000055),var(--bgimg) center 25%/cover no-repeat!important}
 #v-menu .tile span{color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000a}
 #v-menu .tile:active{background:#ffffff33}
 #views{background:linear-gradient(rgba(236,241,245,.84),rgba(224,231,237,.9)),var(--bgimg) center/cover no-repeat}
@@ -946,6 +946,7 @@ input[type=range]{width:100%;direction:ltr}
  </div>
  <div class="brand"><i></i><b>TREK 650</b><i></i></div>
 </div>
+<input type="file" id="bg-in" accept="image/*" hidden>
 <input type="file" id="file-in" accept=".gpx,.kml,.kmz,.xml,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" multiple hidden>
 
 <script>/* @preserve
@@ -1802,6 +1803,7 @@ function renderSetup(){const l=$('#setup-list');l.innerHTML='';
  row('نوع الخريطة',layerDef(S.layer).name,()=>layerSheet());
  row('رابط مصدر مخصص',S.custom||'مثال: https://api.maptiler.com/maps/outdoor/{z}/{x}/{y}.png?key=…',()=>ask('رابط البلاطات {z}/{x}/{y}',S.custom,v=>{S.custom=v.trim();saveS();if(S.custom)setBase('custom');renderSetup()},{ltr:1,ph:'https://…/{z}/{x}/{y}.png'}));
  row('حفظ البلاطات أثناء التصفح','تُحفظ كل منطقة تشاهدها لاستخدامها بدون إنترنت',()=>{S.autoCache=!S.autoCache;saveS();renderSetup()},S.autoCache);
+ row('خلفية التطبيق',LS.get('bgimg',null)?'صورة من جهازك':'الافتراضية (الصحراء)',bgSheet);
  sec('النظام');
  row('تسجيل المسار تلقائيًا',NATIVE?'يستمر التسجيل والشاشة مقفلة (يتطلب إذن الموقع «دائمًا»)':'',()=>{S.trackRec=!S.trackRec;saveS();updSig();if(NATIVE)startNativeGPS();renderSetup()},S.trackRec);
  row('إبقاء الشاشة تعمل','',()=>{S.wake=!S.wake;saveS();applyWake();renderSetup()},S.wake);
@@ -1817,6 +1819,15 @@ function groupSheet(){const g={};WPTS.forEach(w=>{const k=w.grp||'(بدون مج
   {t:'عرض النقاط في القائمة',fn:()=>{$('#wpt-search').value=k==='(بدون مجموعة)'?'':k;go('wpts');renderWpts()}},
   {t:'تصدير المجموعة GPX (لجهاز الجارمن)',fn:()=>exportGPX(WPTS.filter(inG),[],k)},
   {t:'حذف المجموعة ('+g[k]+' نقطة)',fn:()=>setTimeout(()=>confirmIt('حذف كل نقاط «'+k+'»؟',()=>{WPTS=WPTS.filter(w=>!inG(w));saveW();drawWpts();renderWpts()},'حذف'),30)}])},30)})))}
+/* custom background: stored only on this device */
+function applyBg(){const d=LS.get('bgimg',null);if(d)document.documentElement.style.setProperty('--bgimg','url("'+d+'")');else document.documentElement.style.removeProperty('--bgimg')}
+function bgSheet(){sheet('خلفية التطبيق',[{t:'اختيار صورة من جهازك',s:'تُحفظ في جوالك فقط',fn:()=>$('#bg-in').click()},
+ {t:'الخلفية الافتراضية (الصحراء)',fn:()=>{try{localStorage.removeItem('t650.bgimg')}catch(e){}applyBg();if(CURV==='setup')renderSetup();toast('تمت إعادة الخلفية الافتراضية')}}])}
+$('#bg-in').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const u=URL.createObjectURL(f),im=new Image();
+ im.onload=()=>{const m=1100,k=Math.min(1,m/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*k);cv.height=Math.round(im.height*k);
+  cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);URL.revokeObjectURL(u);let d=cv.toDataURL('image/jpeg',.82);if(d.length>1.5e6)d=cv.toDataURL('image/jpeg',.6);
+  if(LS.set('bgimg',d)){applyBg();if(CURV==='setup')renderSetup();toast('تم تغيير الخلفية ✓')}};
+ im.onerror=()=>{URL.revokeObjectURL(u);toast('تعذّر فتح الصورة')};im.src=u};
 function layerSheet(){sheet('نوع الخريطة',visLayers().map(k=>({t:LAYERS[k].name,sel:S.layer===k,fn:()=>{setBase(k);if(CURV==='setup')renderSetup()}})))}
 
 /* ============ page menus (≡) ============ */
@@ -1851,7 +1862,7 @@ window.addEventListener('popstate',()=>{if(CURV!=='menu'){back();history.pushSta
 try{history.pushState(null,'',location.href)}catch(e){}
 
 /* ============ boot ============ */
-renderMenu();initMap();show('menu');updSig();startGPS();applyWake();
+applyBg();renderMenu();initMap();show('menu');updSig();startGPS();applyWake();
 setInterval(()=>{if(CURV==='map')renderFields($('#v-map'))},2000);
 </script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
