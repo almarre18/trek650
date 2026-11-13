@@ -839,7 +839,7 @@ input[type=range]{width:100%;direction:ltr}
 #v-menu .tile span{color:#fff;text-shadow:0 1px 3px #000,0 0 8px #000a}
 #v-menu .tile:active{background:#ffffff33}
 #views{background:linear-gradient(rgba(236,241,245,.84),rgba(224,231,237,.9)),var(--bgimg) center/cover no-repeat}
-#v-where,#v-wpts,#v-wpt,#v-trip,#v-tracks,#v-dl,#v-coord,#v-setup{background:transparent}
+#v-desert,#v-where,#v-wpts,#v-wpt,#v-trip,#v-tracks,#v-dl,#v-coord,#v-setup{background:transparent}
 
 /* ---- compass (dark navigator style) ---- */
 #v-compass{background:#0b0b0c!important;color:#f2f2f2;display:none}
@@ -1037,6 +1037,7 @@ body.night .tgrid{background:#26323d}
     <div id="dp-pad"></div>
    </section>
 
+   <section class="view" id="v-desert"><div id="ds-body"></div></section>
    <!-- SETUP -->
    <section class="view" id="v-setup"><div class="list" id="setup-list"></div></section>
   </div>
@@ -1416,7 +1417,7 @@ function confirmIt(msg,cb,label){const o=$('#ovl');o.querySelector('.sh-title').
 
 /* ============ navigation / router ============ */
 const VIEWS={menu:'القائمة الرئيسية',map:'الخريطة',where:'إلى أين؟',wpts:'إدارة النقاط',wpt:'نقطة طريق',compass:'البوصلة',trip:'كمبيوتر الرحلة',
- tracks:'إدارة المسارات',sat:'الأقمار الصناعية',dl:'تنزيل الخرائط',coord:'الإحداثيات',setup:'الإعداد'};
+ tracks:'إدارة المسارات',sat:'الأقمار الصناعية',dl:'تنزيل الخرائط',coord:'الإحداثيات',setup:'الإعداد',desert:'خرائط البر'};
 let CURV='menu';const STACK=[];
 function go(v,replace){if(v===CURV){render(v);return}if(!replace)STACK.push(CURV);show(v)}
 function back(){closeOvl();if(CURV==='coord')COFROM=null;if(MEAS.on&&CURV==='map'){measEnd();return}show(STACK.pop()||'menu')}
@@ -1431,7 +1432,7 @@ $('#sb-back').onclick=back;
 $('#sb-menu').onclick=()=>PAGEMENU[CURV]&&PAGEMENU[CURV]();
 function refresh(){const v=CURV;if(v==='map')renderFields($('#v-map'));else if(v==='compass')drawDial();else if(v==='trip')renderTrip();else if(v==='sat')renderSat();else if(v==='where'||v==='wpts')updDistances()}
 function render(v){({menu:renderMenu,where:renderWhere,wpts:renderWpts,wpt:renderWpt,compass:()=>{drawDial();enableCompass(false)},trip:renderTrip,tracks:renderTracks,
- sat:renderSat,dl:renderDL,coord:renderCoord,setup:renderSetup,map:()=>renderFields($('#v-map'))}[v]||(()=>{}))()}
+ sat:renderSat,dl:renderDL,desert:renderDesert,coord:renderCoord,setup:renderSetup,map:()=>renderFields($('#v-map'))}[v]||(()=>{}))()}
 
 /* ============ main menu ============ */
 const G={
@@ -1446,12 +1447,13 @@ const G={
  dl:'<path d="M14 33a9 9 0 01-1.5-17.9A12 12 0 0136 13a9 9 0 011 18"/><path d="M24 21v19M17 33l7 7 7-7"/>',
  coord:'<circle cx="24" cy="24" r="12"/><path d="M24 4v12M24 32v12M4 24h12M32 24h12"/><circle cx="24" cy="24" r="2.5" fill="#fff"/>',
  measure:'<path d="M5 33L33 5l10 10-28 28z"/><path d="M12 26l4 4M17 21l3 3M22 16l4 4M27 11l3 3"/>',
+ desert:'<path d="M4 36c8-12 12-12 18-4 5-9 9-10 22 4"/><path d="M4 42h40"/><circle cx="35" cy="12" r="5"/>',
  setup:'<circle cx="24" cy="24" r="6.5"/><path d="M24 5v7M24 36v7M5 24h7M36 24h7M10.5 10.5l5 5M32.5 32.5l5 5M10.5 37.5l5-5M32.5 15.5l5-5"/>'};
 const svgI=(k,sz)=>`<svg viewBox="0 0 48 48" width="${sz||40}" height="${sz||40}" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">${G[k]}</svg>`;
 const MENU=[['map','الخريطة','#2e8b3d','#145a22'],['where','إلى أين؟','#2d7fe0','#0f4a9a'],['mark','تحديد نقطة','#e0402e','#9a1d10'],
  ['wpts','إدارة النقاط','#1fa0c9','#0b6283'],['compass','البوصلة','#7a8794','#3c4752'],['trip','كمبيوتر الرحلة','#ef8b1a','#a5530a'],
  ['tracks','المسارات','#8e44c9','#572080'],['sat','الأقمار الصناعية','#4a5f7a','#24344a'],['dl','تنزيل الخرائط','#16a085','#0b5e4e'],
- ['coord','الإحداثيات','#c0367a','#7d1449'],['measure','قياس مسافة/مساحة','#d4a017','#8a6608'],['setup','الإعداد','#56626e','#2a333b']];
+ ['coord','الإحداثيات','#c0367a','#7d1449'],['measure','قياس مسافة/مساحة','#d4a017','#8a6608'],['setup','الإعداد','#56626e','#2a333b'],['desert','خرائط البر','#c98a2b','#7a4c0c']];
 function renderMenu(){const g=$('#menugrid');if(g.childElementCount)return;
  MENU.forEach(([k,t,c1,c2])=>{const b=document.createElement('button');b.className='tile';
   b.innerHTML=`<div class="ic" style="background:linear-gradient(${c1},${c2})">${svgI(k)}</div><span>${t}</span>`;
@@ -1784,9 +1786,9 @@ function exportGPX(wpts,trks,name){const fn=safeName(name)+'.gpx',txt=toGPX(wpts
  let file=null;try{file=new File([blob],fn,{type:'application/gpx+xml'})}catch(e){}
  if(file&&navigator.canShare&&navigator.canShare({files:[file]}))sheet('تصدير '+fn,[{t:'تنزيل الملف',fn:dl},{t:'مشاركة (واتساب، بريد، Drive…)',fn:()=>navigator.share({files:[file],title:fn}).catch(()=>{})}]);
  else dl()}
-function importFiles(files){let nw=0,nt=0,pending=files.length;toast('جارٍ الاستيراد…');
+function importFiles(files){const reg=IMPREG,w0=WPTS.length,t0=TRACKS.length;IMPREG=null;let nw=0,nt=0,pending=files.length;toast('جارٍ الاستيراد…');
  [...files].forEach(f=>{const r=new FileReader();r.onload=async()=>{try{const txt=await fileText(new Uint8Array(r.result),f.name);const res=parseGeo(txt,f.name.replace(/\.(gpx|kml|kmz|xml)$/i,''));nw+=res.w;nt+=res.t}catch(e){toast('تعذّرت قراءة '+f.name+(e&&e.message==='kmz'?' — صدّر الملف بصيغة KML':''),4000)}
-  if(--pending===0){const ok=saveW()&&saveT();drawWpts();drawTracks();if(ok)toast(`تم الاستيراد: ${nw} نقطة، ${nt} مسار`,3500);render(CURV)}};r.readAsArrayBuffer(f)})}
+  if(--pending===0){if(reg){for(let i=w0;i<WPTS.length;i++)WPTS[i].reg=reg;for(let i=t0;i<TRACKS.length;i++)TRACKS[i].reg=reg}const ok=saveW()&&saveT();drawWpts();drawTracks();if(ok)toast(`تم الاستيراد: ${nw} نقطة، ${nt} مسار`,3500);render(CURV)}};r.readAsArrayBuffer(f)})}
 // Read GPX/KML text; KMZ is a ZIP holding doc.kml.
 async function fileText(u8,name){if(u8[0]===0x50&&u8[1]===0x4b)return unzipKml(u8);return new TextDecoder('utf-8').decode(u8)}
 async function unzipKml(u8){const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);let e=-1;
@@ -1997,6 +1999,26 @@ $('#bg-in').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)retur
   cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);URL.revokeObjectURL(u);let d=cv.toDataURL('image/jpeg',.82);if(d.length>1.5e6)d=cv.toDataURL('image/jpeg',.6);
   if(LS.set('bgimg',d)){applyBg();if(CURV==='setup')renderSetup();toast('تم تغيير الخلفية ✓')}};
  im.onerror=()=>{URL.revokeObjectURL(u);toast('تعذّر فتح الصورة')};im.src=u};
+/* ---- desert maps helper: each user downloads the public KML himself; nothing is bundled ---- */
+let IMPREG=null;$('#file-in').addEventListener('cancel',()=>IMPREG=null);
+const DREG=[['الرياض','1zDvUx5fza1RvGTDpoDrx2YeMRrmvbNKe'],['الشرقية','1SPQZ7GkcngMUjwMhYqrw-ANgddZrY7y6'],['القصيم','1uife5mhtb6LyfjWfsSSEk6wuq-R1Nkcq'],['حائل','18fBeGiAoVbLTGNcJoXR2NQUpuaInXepi'],['مكة المكرمة','1RAERgQNPG6IWwKkK3svbmQNOh8moerCW'],['المدينة المنورة','1nB9BEpJwKrBUpNZl0r81Nw8dbLfQhUiw'],['الحدود الشمالية','1Ca79X7Y82zn1FWqZlJlgtxaCc4VSD1_X'],['الجوف','1HqaIi2Hp02lQelti20ago_cgtA7fMUcs'],['تبوك','1ex2Fz9YoPgxm5W0WiEJ7GU6HYDhSnVdJ'],['عسير','1Ph5YSXGpngGB61eOnlD-5u0LdtBsQN-N'],['الباحة','1_Mwi6VATi5tWg-UoFsxnVEjdSbiHXNnU'],['نجران','1WsNswtQtjCouYxJC_7RsdIvwoM_5K30C'],['جازان','12vYaqBx9aijU5r-cIR7NUwNv-xAHafaw']];
+const regStats=n=>({w:WPTS.filter(w=>w.reg===n),t:TRACKS.filter(t=>t.reg===n)});
+function openExt(u){const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
+function regBox(st){const pts=st.w.map(w=>[w.lat,w.lon]);st.t.forEach(t=>t.pts.forEach(p=>pts.push(p)));return pts.length?bboxOf(pts):null}
+function renderDesert(){const b=$('#ds-body');
+ b.innerHTML='<div class="panel"><h4>خرائط البر — مناطق المملكة</h4><div class="note">١) اضغط على المنطقة ثم «تحميل ملف الخريطة» واحفظه في «الملفات».<br>٢) ارجع واضغط «استيراد الملف».<br>البيانات تُحفظ في جوالك فقط. حقوقها لأصحابها (موقع الخرائط البرية / تطبيق الخرائط السياحية) — للاستخدام الشخصي.</div></div><div class="list" id="ds-list"></div>';
+ DREG.forEach(([n,mid])=>{const st=regStats(n),has=st.w.length+st.t.length>0,r=document.createElement('button');r.className='row';
+  r.innerHTML=`<div class="ri" style="display:flex;align-items:center;justify-content:center;background:${has?'#16a085':'#c98a2b'};border-radius:8px;color:#fff;font-weight:800">${has?'✓':svgI('desert',24)}</div><div class="rt"><b>${n}</b><small style="direction:rtl">${has?st.w.length+' نقطة • '+st.t.length+' مسار/منطقة':'لم تُستورد بعد'}</small></div><span>›</span>`;
+  r.onclick=()=>regSheet(n,mid);$('#ds-list').appendChild(r)})}
+function regSheet(n,mid){const st=regStats(n),has=st.w.length+st.t.length>0,bb=regBox(st);
+ const it=[{t:'⬇ تحميل ملف الخريطة',s:'يفتح في المتصفح — احفظ الملف في «الملفات»',fn:()=>openExt('https://www.google.com/maps/d/kml?mid='+mid)},
+  {t:'📂 استيراد الملف',s:'اختر الملف الذي حمّلته (KMZ / KML)',fn:()=>{IMPREG=n;pickFile()}},
+  {t:'🌐 فتح الخريطة في المتصفح',s:'إذا لم يعمل التحميل: ⋮ ثم Download KML',fn:()=>openExt('https://www.google.com/maps/d/viewer?mid='+mid)}];
+ if(has&&bb)it.push({t:'🗺 عرض على الخريطة',fn:()=>{follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>map.fitBounds([[bb.s,bb.w],[bb.n,bb.e]]),60)}},
+  {t:'📥 تنزيل خرائط المنطقة للعمل بدون إنترنت',fn:()=>{DLMODE='area';DLB=Object.assign({z:10},bb);go('dl')}},
+  {t:'تصدير GPX (لجهاز الجارمن)',fn:()=>exportGPX(st.w,st.t,n)},
+  {t:'حذف بيانات المنطقة',fn:()=>setTimeout(()=>confirmIt('حذف كل نقاط ومسارات «'+n+'»؟',()=>{WPTS=WPTS.filter(w=>w.reg!==n);TRACKS=TRACKS.filter(t=>t.reg!==n);saveW();saveT();drawWpts();drawTracks();renderDesert()},'حذف'),30)});
+ sheet('خريطة '+n,it)}
 function layerSheet(){sheet('نوع الخريطة',visLayers().map(k=>({t:LAYERS[k].name,sel:S.layer===k,fn:()=>{setBase(k);if(CURV==='setup')renderSetup()}})))}
 
 /* ============ page menus (≡) ============ */
