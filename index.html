@@ -899,6 +899,8 @@ input[type=range]{width:100%;direction:ltr}
 .c-drow{display:flex;gap:8px;align-items:center;max-width:100%}
 .c-add{flex:none;width:46px;height:46px;border-radius:15px;background:#f5a623;border:0;color:#111;font-size:26px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .c-add:active{background:#d98c0c}
+.blend-mul{mix-blend-mode:multiply}
+body.sharp .leaflet-tile-pane{filter:contrast(1.25) saturate(1.3) brightness(.98)}
 /* ---- night mode (whole app) ---- */
 body.night{--scr:#0f1419}
 body.night #views{background:linear-gradient(rgba(10,14,18,.9),rgba(10,14,18,.94)),var(--bgimg) center/cover no-repeat}
@@ -1221,6 +1223,8 @@ const LAYERS={
  sat:{name:'قمر صناعي — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',max:19,kb:28,attr:'Imagery © Esri, Maxar, Earthstar Geographics'},
  etopo:{name:'طبوغرافية — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',max:19,kb:20,attr:'Tiles © Esri'},
  hybrid:{name:'قمر صناعي + أسماء — Esri',parts:['sat','lbl'],max:19,kb:34,attr:'Imagery © Esri, Maxar, Earthstar Geographics | Labels © Esri'},
+ dunes:{name:'رمال واضحة — قمر صناعي + تضاريس',parts:['sat','hill'],max:19,kb:40,attr:'Imagery © Esri, Maxar, Earthstar Geographics | Hillshade © Esri'},
+ hill:{hidden:1,blend:1,name:'hillshade',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}',max:15,kb:10,attr:''},
  estreet:{name:'شوارع تفصيلية — Esri',url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',max:19,kb:16,attr:'Tiles © Esri'},
  custom:{name:'مصدر مخصص (رابطك)',url:'',max:19,kb:20,attr:'Custom tiles'},
  lbl:{hidden:1,name:'labels',url:'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',max:19,kb:6,attr:''}
@@ -1238,10 +1242,10 @@ async function parentTile(id,c){for(let d=1;d<=6&&c.z-d>=0;d++){const b=await ti
 const OfflineLayer=L.GridLayer.extend({
  createTile(c,done){
   const img=document.createElement('img');img.alt='';img.setAttribute('role','presentation');
-  const id=this.options.lid,k=id+'/'+c.z+'/'+c.x+'/'+c.y,url=tileURL(id,c.z,c.x,c.y);
+  const id=this.options.lid,Z=c.z+(this.options.hd?1:0),k=id+'/'+Z+'/'+c.x+'/'+c.y,url=tileURL(id,Z,c.x,c.y);
   const direct=()=>{img.onload=()=>done(null,img);img.onerror=()=>done(new Error('tile'),img);img.src=url};
   const fromBlob=b=>{const u=URL.createObjectURL(b);img.onload=()=>{URL.revokeObjectURL(u);done(null,img)};img.onerror=()=>{URL.revokeObjectURL(u);done(new Error('tile'),img)};img.src=u};
-  const fallback=()=>parentTile(id,c).then(b=>b?fromBlob(b):done(new Error('tile'),img)).catch(()=>done(new Error('tile'),img));
+  const fallback=()=>parentTile(id,{z:Z,x:c.x,y:c.y}).then(b=>b?fromBlob(b):done(new Error('tile'),img)).catch(()=>done(new Error('tile'),img));
   const direct2=()=>{img.onload=()=>done(null,img);img.onerror=fallback;img.src=url};
   tileGet(k).then(b=>{
    if(b)return fromBlob(b);
@@ -1256,7 +1260,8 @@ const visLayers=()=>Object.keys(LAYERS).filter(k=>!LAYERS[k].hidden&&(k!=='custo
 function setBase(id){if(!LAYERS[id]||LAYERS[id].hidden)id='topo';S.layer=id;saveS();const L=layerDef(id);
  if(id==='custom'&&!L.url){toast('أدخل رابط المصدر المخصص من الإعدادات');}
  baseLayers.forEach(l=>map.removeLayer(l));
- baseLayers=(L.parts||[id]).map((p,i)=>{const P=layerDef(p);return new OfflineLayer({lid:p,maxNativeZoom:P.max,maxZoom:20,attribution:i?'':L.attr,keepBuffer:3,zIndex:1+i}).addTo(map)})}
+ const hd=S.hd!==false&&(window.devicePixelRatio||1)>1.3;
+ baseLayers=(L.parts||[id]).map((p,i)=>{const P=layerDef(p);return new OfflineLayer({lid:p,hd,tileSize:hd?128:256,maxNativeZoom:hd?P.max-1:P.max,maxZoom:20,attribution:i?'':L.attr,keepBuffer:hd?4:3,zIndex:1+i,className:P.blend?'blend-mul':'',opacity:P.blend?.6:1}).addTo(map)})}
 
 const ARROW='<svg width="36" height="36" viewBox="0 0 36 36"><path d="M18 2L31 32 18 25 5 32z" fill="#1565d8" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg>';
 const DOT='<svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="9" fill="#1565d8" stroke="#fff" stroke-width="3"/></svg>';
@@ -1848,7 +1853,7 @@ function densify(pts,step){const out=[[pts[0][0],pts[0][1]]];let last=out[0];
 function areaRects(a,z){if(!a.corr)return [tileRange(a.b,z)];const dLat=a.corr.w/111320;
  return a.corr.pts.map(p=>{const dLon=a.corr.w/(111320*Math.max(.01,Math.cos(p[0]*D2R)));return tileRange({n:p[0]+dLat,s:p[0]-dLat,e:p[1]+dLon,w:p[1]-dLon},z)})}
 function areaKeys(a){const out=new Set(),lids=partsOf(a.lid);
- for(let z=a.z1;z<=a.z2;z++)for(const r of areaRects(a,z))for(let x=r.x1;x<=r.x2;x++)for(let y=r.y1;y<=r.y2;y++)for(const l of lids)out.add(l+'/'+z+'/'+x+'/'+y);
+ for(let z=a.z1;z<=a.z2;z++)for(const r of areaRects(a,z))for(let x=r.x1;x<=r.x2;x++)for(let y=r.y1;y<=r.y2;y++)for(const l of lids)if(z<=(LAYERS[l]||{max:19}).max)out.add(l+'/'+z+'/'+x+'/'+y);
  return [...out]}
 function areaCount(a){if(!a.corr)return countTiles(a.b,a.z1,a.z2)*partsOf(a.lid).length;return areaKeys(a).length}
 const MAXTILES=150000;
@@ -1972,6 +1977,8 @@ function renderSetup(){const l=$('#setup-list');l.innerHTML='';
  row('الوحدات',{metric:'متري (كم، م)',imperial:'إمبراطوري (ميل، قدم)',nautical:'بحري (nm، عقدة)'}[S.units],()=>sheet('الوحدات',[['metric','متري (كم، م)'],['imperial','إمبراطوري (ميل، قدم)'],['nautical','بحري (nm، عقدة)']].map(([k,t])=>({t,sel:S.units===k,fn:()=>{S.units=k;saveS();renderSetup()}}))));
  sec('الخريطة');
  row('نوع الخريطة',layerDef(S.layer).name,()=>layerSheet());
+ row('خرائط عالية الدقة (HD)','صورة أحدّ على شاشة الجوال — تستهلك بيانات أكثر',()=>{S.hd=S.hd===false;saveS();setBase(S.layer);renderSetup()},S.hd!==false);
+ row('توضيح الرمال','تباين وألوان أقوى لإبراز الكثبان والعروق',()=>{S.sharp=!S.sharp;saveS();document.body.classList.toggle('sharp',!!S.sharp);renderSetup()},!!S.sharp);
  row('رابط مصدر مخصص',S.custom||'مثال: https://api.maptiler.com/maps/outdoor/{z}/{x}/{y}.png?key=…',()=>ask('رابط البلاطات {z}/{x}/{y}',S.custom,v=>{S.custom=v.trim();saveS();if(S.custom)setBase('custom');renderSetup()},{ltr:1,ph:'https://…/{z}/{x}/{y}.png'}));
  row('حفظ البلاطات أثناء التصفح','تُحفظ كل منطقة تشاهدها لاستخدامها بدون إنترنت',()=>{S.autoCache=!S.autoCache;saveS();renderSetup()},S.autoCache);
  row('خلفية التطبيق',LS.get('bgimg',null)?'صورة من جهازك':'الافتراضية (الصحراء)',bgSheet);
@@ -2005,8 +2012,37 @@ const DREG=[['الرياض','1zDvUx5fza1RvGTDpoDrx2YeMRrmvbNKe'],['الشرقي�
 const regStats=n=>({w:WPTS.filter(w=>w.reg===n),t:TRACKS.filter(t=>t.reg===n)});
 function openExt(u){const a=document.createElement('a');a.href=u;a.target='_blank';a.rel='noopener';document.body.appendChild(a);a.click();a.remove()}
 function regBox(st){const pts=st.w.map(w=>[w.lat,w.lon]);st.t.forEach(t=>t.pts.forEach(p=>pts.push(p)));return pts.length?bboxOf(pts):null}
+/* ---- Rub' al Khali place names, fetched by the app from OpenStreetMap (ODbL) ---- */
+const RUB={n:23.5,s:16.5,e:56.5,w:44.5},RUBN='الربع الخالي';
+const OSMT=[[t=>t.place,'مدن وقرى ومراكز','#e8213a'],[t=>t.man_made==='water_well'||t.natural==='spring'||t.amenity==='drinking_water','آبار وموارد مياه','#0b8f3a'],
+ [t=>['water','wetland','wadi','valley','bay'].includes(t.natural)||t.waterway,'وديان وتجمع مياه','#1f6fd6'],
+ [t=>['dune','sand','desert'].includes(t.natural),'عروق ونفود ورمال','#ff8c00'],
+ [t=>['peak','ridge','cliff','hill','rock','plateau','mesa','saddle','cave_entrance','volcano'].includes(t.natural),'جبال وهضاب','#7a4a1e'],
+ [t=>t.tourism||t.amenity==='fuel','خدمات ومخيمات','#7a2ccf'],[t=>true,'أسماء أخرى','#6b7785']];
+async function osmRub(){if(!navigator.onLine)return toast('يحتاج اتصالًا بالإنترنت');
+ const bb=`(${RUB.s},${RUB.w},${RUB.n},${RUB.e})`;
+ const q=`[out:json][timeout:120];(nwr["name"]["natural"]${bb};nwr["name"]["place"]${bb};nwr["name"]["man_made"="water_well"]${bb};nwr["name"]["tourism"~"camp_site|attraction|viewpoint"]${bb};node["name"]["amenity"~"fuel|drinking_water"]${bb};);out center 6000;`;
+ toast('جارٍ تحميل أسماء الأماكن من OpenStreetMap… قد يستغرق دقيقة',60000);let data=null;
+ for(const u of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter']){
+  try{const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});if(r.ok){data=await r.json();break}}catch(e){}}
+ if(!data||!data.elements)return toast('تعذّر التحميل من OpenStreetMap — حاول بعد قليل',4000);
+ const ex=new Set(WPTS.map(x=>x.name+'|'+x.lat.toFixed(4)+'|'+x.lon.toFixed(4)));let n=0;
+ data.elements.forEach(e=>{const t=e.tags||{},lat=e.lat!=null?e.lat:e.center&&e.center.lat,lon=e.lon!=null?e.lon:e.center&&e.center.lon,name=(t['name:ar']||t.name||'').trim();
+  if(!name||!isFinite(lat)||!isFinite(lon))return;const k=name+'|'+lat.toFixed(4)+'|'+lon.toFixed(4);if(ex.has(k))return;ex.add(k);const T=OSMT.find(x=>x[0](t));
+  WPTS.push({id:uid(),name,lat:+lat.toFixed(6),lon:+lon.toFixed(6),ele:t.ele&&isFinite(+t.ele)?Math.round(+t.ele):null,time:Date.now(),sym:'Flag, Blue',grp:T[1],color:T[2],reg:RUBN,desc:t['name:en']&&t['name:en']!==name?t['name:en']:''});n++});
+ if(saveW()){drawWpts();if(CURV==='desert')renderDesert();toast('تمت إضافة '+n+' اسم مكان في الربع الخالي ✓',4000)}}
+function rubSheet(){const st=regStats(RUBN),has=st.w.length>0;
+ const it=[{t:(has?'🔄 تحديث':'⬇ تحميل')+' أسماء الأماكن',s:'من OpenStreetMap — مدن، آبار، عروق، جبال، وديان',fn:osmRub},
+  {t:'🗺 عرض الربع الخالي على الخريطة',fn:()=>{follow=false;$('#locbtn').classList.remove('follow');go('map');setTimeout(()=>map.fitBounds([[RUB.s,RUB.w],[RUB.n,RUB.e]]),60)}},
+  {t:'📥 تنزيل خرائط للعمل بدون إنترنت',s:'اختر جزءًا من الربع الخالي',fn:()=>setTimeout(()=>sheet('أي جزء؟',[['الربع الخالي كاملًا (تفصيل عام)',RUB,9],['الشرقي — العروق المعترضة وشيبة',{n:23.5,s:19.5,e:56.5,w:51.5},11],['الأوسط — يبرين وجنوبها',{n:23.5,s:18.5,e:51.5,w:48},11],['الغربي — شرورة والخرخير ونجران',{n:20.5,s:16.5,e:51.5,w:44.5},11]].map(([t,b,z])=>({t,fn:()=>{DLMODE='area';DLB=Object.assign({z},b);LS.set('dlz',[6,z]);go('dl')}}))),30)}];
+ if(has)it.push({t:'تصدير GPX (لجهاز الجارمن)',fn:()=>exportGPX(st.w,[],RUBN)},
+  {t:'حذف أسماء الربع الخالي',fn:()=>setTimeout(()=>confirmIt('حذف '+st.w.length+' اسم مكان؟',()=>{WPTS=WPTS.filter(w=>w.reg!==RUBN);saveW();drawWpts();renderDesert()},'حذف'),30)});
+ sheet(RUBN,it)}
 function renderDesert(){const b=$('#ds-body');
  b.innerHTML='<div class="panel"><h4>خرائط البر — مناطق المملكة</h4><div class="note">١) اضغط على المنطقة ثم «تحميل ملف الخريطة» واحفظه في «الملفات».<br>٢) ارجع واضغط «استيراد الملف».<br>البيانات تُحفظ في جوالك فقط. حقوقها لأصحابها (موقع الخرائط البرية / تطبيق الخرائط السياحية) — للاستخدام الشخصي.</div></div><div class="list" id="ds-list"></div>';
+ {const st=regStats(RUBN),has=st.w.length>0,r=document.createElement('button');r.className='row';
+  r.innerHTML=`<div class="ri" style="display:flex;align-items:center;justify-content:center;background:${has?'#16a085':'#ff8c00'};border-radius:8px;color:#fff;font-weight:800">${has?'✓':svgI('desert',24)}</div><div class="rt"><b>${RUBN}</b><small style="direction:rtl">${has?st.w.length+' اسم مكان • © OpenStreetMap':'أسماء الأماكن من OpenStreetMap — تحميل مباشر'}</small></div><span>›</span>`;
+  r.onclick=rubSheet;$('#ds-list').appendChild(r)}
  DREG.forEach(([n,mid])=>{const st=regStats(n),has=st.w.length+st.t.length>0,r=document.createElement('button');r.className='row';
   r.innerHTML=`<div class="ri" style="display:flex;align-items:center;justify-content:center;background:${has?'#16a085':'#c98a2b'};border-radius:8px;color:#fff;font-weight:800">${has?'✓':svgI('desert',24)}</div><div class="rt"><b>${n}</b><small style="direction:rtl">${has?st.w.length+' نقطة • '+st.t.length+' مسار/منطقة':'لم تُستورد بعد'}</small></div><span>›</span>`;
   r.onclick=()=>regSheet(n,mid);$('#ds-list').appendChild(r)})}
@@ -2053,7 +2089,7 @@ window.addEventListener('popstate',()=>{if(CURV!=='menu'){back();history.pushSta
 try{history.pushState(null,'',location.href)}catch(e){}
 
 /* ============ boot ============ */
-if(S.night)document.body.classList.add('night');applyBg();renderMenu();initMap();show('menu');updSig();startGPS();applyWake();
+if(S.night)document.body.classList.add('night');if(S.sharp)document.body.classList.add('sharp');applyBg();renderMenu();initMap();show('menu');updSig();startGPS();applyWake();
 setInterval(()=>{if(CURV==='map')renderFields($('#v-map'))},2000);
 </script>
 <script>if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
